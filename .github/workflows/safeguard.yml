@@ -1,0 +1,95 @@
+# CI Pipeline for Raven Foundry
+# Runs all safeguard checks on every push and PR
+
+name: Safeguard Checks
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  layer1-spec:
+    name: Specification Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Verify module contracts exist
+        run: |
+          echo "Verifying AGENTS.md files exist..."
+          ls -la src/raven/*/AGENTS.md
+          echo "Verifying STANDARDS.md exists..."
+          test -f STANDARDS.md
+
+  layer2-lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run ruff
+        run: ruff check src/
+
+      - name: Run black
+        run: black --check src/
+
+      - name: Run mypy
+        run: mypy src/
+
+  layer3-test:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run contract tests
+        run: pytest tests/contracts/ -v
+
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests with coverage
+        run: pytest tests/ --cov=src/ --cov-report=term-missing
+
+      - name: Enforce coverage threshold
+        run: |
+          pytest tests/ --cov=src/ --cov-fail-under=80 || \
+          (echo "Coverage below 80%" && exit 1)
