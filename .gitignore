@@ -12,3 +12,4 @@ data/
 
 # Build artifact
 *egg-info*/
+*pycache*/
