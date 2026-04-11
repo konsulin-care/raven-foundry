@@ -1,3 +1,14 @@
 # Ignore vim swap files
 *swp
 *swo
+
+# Data directory (database files)
+data/
+
+# Environment files (secrets)
+.env*
+!.env.example
+*.db*
+
+# Build artifact
+*egg-info*/
