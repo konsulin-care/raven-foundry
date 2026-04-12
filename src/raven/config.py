@@ -7,6 +7,7 @@ from typing import Optional
 
 # Default values
 DEFAULT_OPENALEX_API_URL = "https://api.openalex.org"
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 
 # Global config cache
 _config: dict[str, str] = {}
@@ -135,6 +136,17 @@ def get_groq_api_key() -> str:
         )
 
     return api_key
+
+
+def get_groq_model() -> str:
+    """Get GROQ_MODEL from environment.
+
+    Returns:
+        The model identifier string, defaults to openai/gpt-oss-120b.
+    """
+    config = _load_config()
+
+    return config.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
 
 
 def get_openalex_api_key() -> str:

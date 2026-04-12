@@ -1,9 +1,10 @@
 """LLM module - Groq-based LLM interactions for Raven.
 
-Model: GPT OSS 120B
+Model: openai/gpt-oss-120b
 
 Environment (from .env):
 - GROQ_API_KEY: Required. Get from https://console.groq.com/
+- GROQ_MODEL: Optional. Defaults to openai/gpt-oss-120b
 
 Rules (from AGENTS.md):
 - Batch requests whenever possible
@@ -17,10 +18,10 @@ import json
 from typing import Any, cast
 
 # Import config for future Groq API integration
-from raven.config import get_groq_api_key  # noqa: F401
+from raven.config import get_groq_api_key, get_groq_model  # noqa: F401
 
 # Groq configuration
-GROQ_MODEL = "llama-3.1-70b-versatile"
+GROQ_MODEL = get_groq_model()
 RATE_LIMIT_PER_DAY = 1000
 TPM_LIMIT = 10000  # tokens per minute (example)
 
