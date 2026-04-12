@@ -36,6 +36,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-mock",
+    "requests-mock",
     "black",
     "ruff",
     "mypy",

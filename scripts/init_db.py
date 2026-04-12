@@ -99,6 +99,7 @@ def main() -> int:
 
         try:
             import sqlite_vec
+
             sqlite_vec.load(db)
         except ImportError:
             print("Error: sqlite-vec not installed.", file=sys.stderr)
