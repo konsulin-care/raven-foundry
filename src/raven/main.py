@@ -1,13 +1,11 @@
 """CLI entry point for Raven - offline-first research system."""
 
 from pathlib import Path
+from typing import Optional
 
 import click
 
-from raven.config import _get_data_dir
-
-# Database path stored in app context
-DEFAULT_DB_PATH = _get_data_dir() / "raven.db"
+from raven.config import _get_data_dir, _load_config
 
 
 def _get_version() -> str:
@@ -20,41 +18,64 @@ def _get_version() -> str:
         return "dev"
 
 
+def _resolve_db_path(
+    env_path: Optional[Path] = None, db_path: Optional[Path] = None
+) -> Path:
+    """Resolve database path with proper precedence.
+
+    1. If --db is explicitly provided, use it directly
+    2. Otherwise derive from env-loaded RAVEN_DATA_DIR (defaults to system default)
+
+    Args:
+        env_path: Optional path to .env file
+        db_path: Optional explicit db path from --db option
+
+    Returns:
+        Resolved Path to the database
+    """
+    # Load config from env to set RAVEN_DATA_DIR for _get_data_dir()
+    _load_config(env_path)
+
+    if db_path is not None:
+        # Explicit --db option takes precedence
+        return db_path
+
+    # Derive from data_dir (respects RAVEN_DATA_DIR from loaded env)
+    return _get_data_dir() / "raven.db"
+
+
 @click.group()
+@click.pass_context
+def cli(ctx: click.Context) -> None:
+    """Raven - Offline-first CLI research system for academic knowledge curation."""
+    ctx.ensure_object(dict)
+
+
+@cli.command()
+@click.argument("query")
 @click.option(
     "--db",
     "-d",
-    type=click.Path(path_type=Path),
-    default=DEFAULT_DB_PATH,
-    help="Path to the database file.",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Path to the database file (overrides env-derived path)",
 )
 @click.option(
     "--env",
     "-e",
     type=click.Path(path_type=Path, exists=True, dir_okay=False),
     default=None,
-    help="Path to .env file (default: cwd/.env → RAVEN_DATA_DIR/.env)",
+    help="Path to .env file",
 )
 @click.pass_context
-def cli(ctx: click.Context, db: Path, env: Path) -> None:
-    """Raven - Offline-first CLI research system for academic knowledge curation."""
-    ctx.ensure_object(dict)
-    ctx.obj["DB_PATH"] = db
-    ctx.obj["ENV_PATH"] = env
-
-
-@cli.command()
-@click.argument("query")
-@click.pass_context
-def search(ctx: click.Context, query: str) -> None:
+def search(
+    ctx: click.Context, query: str, db: Optional[Path], env: Optional[Path]
+) -> None:
     """Search publications by query string."""
-    from raven.config import _load_config
     from raven.storage import search_papers
 
-    env_path = ctx.obj.get("ENV_PATH")
-    _load_config(env_path)
+    db_path = _resolve_db_path(env, db)
 
-    db_path = ctx.obj["DB_PATH"]
     if not db_path.parent.exists():
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -73,16 +94,29 @@ def search(ctx: click.Context, query: str) -> None:
 
 @cli.command()
 @click.argument("doi")
+@click.option(
+    "--db",
+    "-d",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Path to the database file (overrides env-derived path)",
+)
+@click.option(
+    "--env",
+    "-e",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    default=None,
+    help="Path to .env file",
+)
 @click.pass_context
-def ingest(ctx: click.Context, doi: str) -> None:
+def ingest(
+    ctx: click.Context, doi: str, db: Optional[Path], env: Optional[Path]
+) -> None:
     """Ingest a publication by DOI."""
-    from raven.config import _load_config
     from raven.ingestion import ingest_paper
 
-    env_path = ctx.obj.get("ENV_PATH")
-    _load_config(env_path)
+    db_path = _resolve_db_path(env, db)
 
-    db_path = ctx.obj["DB_PATH"]
     if not db_path.parent.exists():
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -97,12 +131,26 @@ def ingest(ctx: click.Context, doi: str) -> None:
 
 
 @cli.command()
+@click.option(
+    "--db",
+    "-d",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Path to the database file (overrides env-derived path)",
+)
+@click.option(
+    "--env",
+    "-e",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    default=None,
+    help="Path to .env file",
+)
 @click.pass_context
-def init(ctx: click.Context) -> None:
+def init(ctx: click.Context, db: Optional[Path], env: Optional[Path]) -> None:
     """Initialize the database."""
     from raven.storage import init_database
 
-    db_path = ctx.obj["DB_PATH"]
+    db_path = _resolve_db_path(env, db)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     init_database(db_path)
@@ -110,12 +158,27 @@ def init(ctx: click.Context) -> None:
 
 
 @cli.command()
-def info() -> None:
+@click.option(
+    "--db",
+    "-d",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Path to the database file (overrides env-derived path)",
+)
+@click.option(
+    "--env",
+    "-e",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    default=None,
+    help="Path to .env file",
+)
+@click.pass_context
+def info(ctx: click.Context, db: Optional[Path], env: Optional[Path]) -> None:
     """Show details about the current Raven configuration."""
     import sqlite3
 
+    db_path = _resolve_db_path(env, db)
     data_dir = _get_data_dir()
-    db_path = data_dir / "raven.db"
 
     # Get total unique DOIs
     total_papers = 0

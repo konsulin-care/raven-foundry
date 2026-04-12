@@ -171,9 +171,9 @@ class TestCLICommands:
         db_path = tmp_path / "test.db"
         init_database(db_path)
 
-        # Use --db option to pass custom path
+        # Use --db option on subcommand
         result = runner.invoke(
-            raven.main.cli, ["--db", str(db_path), "search", "nonexistent"]
+            raven.main.cli, ["search", "--db", str(db_path), "nonexistent"]
         )
 
         assert result.exit_code == 0
@@ -186,8 +186,8 @@ class TestCLICommands:
         init_database(db_path)
         add_paper(db_path, "10.1234/test", "Test Paper Title", "article")
 
-        # Use --db option to pass custom path
-        result = runner.invoke(raven.main.cli, ["--db", str(db_path), "search", "test"])
+        # Use --db option on subcommand
+        result = runner.invoke(raven.main.cli, ["search", "--db", str(db_path), "test"])
 
         assert result.exit_code == 0
         assert "Test Paper Title" in result.output
@@ -199,8 +199,8 @@ class TestCLICommands:
         runner = CliRunner()
         db_path = tmp_path / "test.db"
 
-        # Use --db option to pass custom path
-        result = runner.invoke(raven.main.cli, ["--db", str(db_path), "init"])
+        # Use --db option on subcommand
+        result = runner.invoke(raven.main.cli, ["init", "--db", str(db_path)])
 
         assert result.exit_code == 0
         assert "Database initialized" in result.output
@@ -214,7 +214,7 @@ class TestCLICommands:
         # Patch where _get_data_dir is used in main.py
         monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
 
-        result = runner.invoke(raven.main.cli, ["--db", str(db_path), "info"])
+        result = runner.invoke(raven.main.cli, ["info", "--db", str(db_path)])
 
         assert result.exit_code == 0
         assert "Version:" in result.output
@@ -231,7 +231,7 @@ class TestCLICommands:
         # Patch where _get_data_dir is used in main.py
         monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
 
-        result = runner.invoke(raven.main.cli, ["--db", str(db_path), "info"])
+        result = runner.invoke(raven.main.cli, ["info", "--db", str(db_path)])
 
         assert result.exit_code == 0
         assert "Total papers indexed: 1" in result.output

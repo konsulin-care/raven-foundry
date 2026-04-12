@@ -104,6 +104,10 @@ def _load_config(env_path: Optional[Path] = None) -> dict[str, str]:
     Args:
         env_path: Explicit path to .env file. If provided and exists, use it.
                 If None, uses default logic (cwd/.env → data_dir/.env).
+
+    Note:
+        Loaded values are propagated to os.environ to ensure consistency
+        across the application (e.g., _get_data_dir() reads RAVEN_DATA_DIR).
     """
     global _config
 
@@ -113,6 +117,10 @@ def _load_config(env_path: Optional[Path] = None) -> dict[str, str]:
         _config = _parse_env_file(env_path)
     else:
         _config = {}
+
+    # Propagate loaded config to os.environ for consistency
+    for key, value in _config.items():
+        os.environ[key] = value
 
     return _config
 
