@@ -35,6 +35,16 @@ def _get_openalex_base_url() -> str:
     return get_openalex_api_url()
 
 
+def normalize_doi(doi: str) -> str:
+    """Normalize DOI by stripping URL prefixes and case normalizing."""
+    doi = doi.strip().lower()
+    if doi.startswith("https://doi.org/"):
+        doi = doi.replace("https://doi.org/", "")
+    elif doi.startswith("doi:"):
+        doi = doi.replace("doi:", "")
+    return doi
+
+
 def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
     """Ingest a paper by DOI from OpenAlex."""
     # Get API configuration
@@ -42,11 +52,7 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
     base_url = _get_openalex_base_url()
 
     # Clean DOI
-    doi = doi.strip().lower()
-    if doi.startswith("https://doi.org/"):
-        doi = doi.replace("https://doi.org/", "")
-    elif doi.startswith("doi:"):
-        doi = doi.replace("doi:", "")
+    doi = normalize_doi(doi)
 
     # Query OpenAlex API (requires doi: prefix)
     url = f"{base_url}/works/doi:{doi}?api_key={api_key}"

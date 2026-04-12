@@ -257,6 +257,57 @@ class TestCLICommands:
         assert "'papers' table not found" in result.output
         assert "Total papers indexed: 0" in result.output
 
+    def test_ingest_command_success(self, tmp_path, monkeypatch):
+        """Test 'raven ingest' with successful API response."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Patch _resolve_db_path to return our test database
+        def mock_resolve_db_path(env_path=None, db_path_param=None):
+            return db_path
+
+        monkeypatch.setattr(raven.main, "_resolve_db_path", mock_resolve_db_path)
+
+        # Patch ingest_paper to return a successful result
+        mock_result = {
+            "doi": "10.1234/test",
+            "title": "Test Research Paper",
+            "type": "article",
+        }
+        monkeypatch.setattr(
+            raven.ingestion, "ingest_paper", lambda db, doi: mock_result
+        )
+
+        result = runner.invoke(
+            raven.main.cli, ["ingest", "10.1234/test", "--db", str(db_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "Ingesting DOI: 10.1234/test" in result.output
+        assert "Successfully ingested: Test Research Paper" in result.output
+
+    def test_ingest_command_failure(self, tmp_path, monkeypatch):
+        """Test 'raven ingest' when API returns failure."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Patch _resolve_db_path to return our test database
+        def mock_resolve_db_path(env_path=None, db_path_param=None):
+            return db_path
+
+        monkeypatch.setattr(raven.main, "_resolve_db_path", mock_resolve_db_path)
+
+        # Patch ingest_paper to return None (failure case)
+        monkeypatch.setattr(raven.ingestion, "ingest_paper", lambda db, doi: None)
+
+        result = runner.invoke(
+            raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "Ingesting DOI: 10.9999/failure" in result.output
+        assert "Failed to ingest publication" in result.output
+
 
 # =============================================================================
 # Ingestion Module Tests with HTTP Mocking

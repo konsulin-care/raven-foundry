@@ -69,21 +69,18 @@ class TestIngestionModuleRules:
 
     def test_doi_cleaning(self):
         """INGESTION: Clean DOI format correctly."""
+        from raven.ingestion import normalize_doi
 
         # Test DOI URL stripping
         test_cases = [
             ("https://doi.org/10.1234/test", "10.1234/test"),
             ("doi:10.1234/test", "10.1234/test"),
+            ("  DOI:10.1234/test  ", "10.1234/test"),
             ("10.1234/test", "10.1234/test"),
         ]
 
         for input_doi, expected in test_cases:
-            cleaned = input_doi.strip().lower()
-            if cleaned.startswith("https://doi.org/"):
-                cleaned = cleaned.replace("https://doi.org/", "")
-            elif cleaned.startswith("doi:"):
-                cleaned = cleaned.replace("doi:", "")
-
+            cleaned = normalize_doi(input_doi)
             assert cleaned == expected
 
 

@@ -69,7 +69,7 @@ Create `src/raven/<module>/__init__.py` with explicit type annotations:
 
 ### Test Structure
 
-```
+```text
 tests/
 ├── unit/
 │   ├── test_ingestion/
@@ -79,7 +79,7 @@ tests/
 ├── integration/
 │   └── test_cli_workflow.py
 └── contracts/
-    └── test_module_contracts.py
+    └── test_module_rules.py
 ```
 
 ### Contract Tests (Required for Each Module)
