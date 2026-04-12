@@ -72,5 +72,10 @@ def add_paper(db_path: Path, doi: str, title: str, type: str = "article") -> Non
                 (doi, title, type),
             )
             conn.commit()
-        except sqlite3.IntegrityError:
-            raise ValueError(f"Paper with DOI {doi} already exists")
+        except sqlite3.IntegrityError as e:
+            error_msg = str(e)
+            # Check if it's specifically a DOI uniqueness constraint violation
+            if "UNIQUE constraint failed" in error_msg and "doi" in error_msg.lower():
+                raise ValueError(f"Paper with DOI {doi} already exists")
+            # Re-raise unrelated integrity errors
+            raise
