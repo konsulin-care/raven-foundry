@@ -4,8 +4,20 @@ from pathlib import Path
 
 import click
 
+from raven.config import _get_data_dir
+
 # Database path stored in app context
-DEFAULT_DB_PATH = Path.home() / ".raven" / "raven.db"
+DEFAULT_DB_PATH = _get_data_dir() / "raven.db"
+
+
+def _get_version() -> str:
+    """Get version from package metadata, default to dev if not installed."""
+    try:
+        from importlib.metadata import version
+
+        return version("raven-foundry")
+    except Exception:
+        return "dev"
 
 
 @click.group()
@@ -79,6 +91,27 @@ def init(ctx: click.Context) -> None:
 
     init_database(db_path)
     click.echo(f"Database initialized at: {db_path}")
+
+
+@cli.command()
+def info() -> None:
+    """Show details about the current Raven configuration."""
+    import sqlite3
+
+    data_dir = _get_data_dir()
+    db_path = data_dir / "raven.db"
+
+    # Get total unique DOIs
+    total_papers = 0
+    if db_path.exists():
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute("SELECT COUNT(DISTINCT doi) FROM papers")
+            total_papers = cursor.fetchone()[0]
+
+    click.echo(f"Version: {_get_version()}")
+    click.echo(f"Data directory: {data_dir}")
+    click.echo(f"Database: {db_path}")
+    click.echo(f"Total papers indexed: {total_papers}")
 
 
 if __name__ == "__main__":

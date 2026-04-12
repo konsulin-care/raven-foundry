@@ -1,5 +1,7 @@
 """Configuration module for Raven - loads environment variables from .env file."""
 
+import os
+import platform
 from pathlib import Path
 from typing import Optional
 
@@ -10,15 +12,49 @@ DEFAULT_OPENALEX_API_URL = "https://api.openalex.org"
 _config: dict = {}
 
 
-def _find_env_file() -> Optional[Path]:
-    """Find .env file by searching upward from current working directory."""
-    cwd = Path.cwd()
+def _get_data_dir() -> Path:
+    """Get data directory, cross-platform compatible.
 
-    # Check current directory and parent directories
-    for path in [cwd, cwd.parent, cwd.parent.parent]:
-        env_path = path / ".env"
-        if env_path.exists():
-            return env_path
+    Returns the appropriate data directory based on OS:
+    - Windows: %APPDATA%/raven
+    - macOS/Linux: $XDG_DATA_HOME/raven if set, otherwise ~/.config/raven
+
+    Override with RAVEN_DATA_DIR environment variable.
+    """
+    # Allow override via environment variable
+    data_dir = os.environ.get("RAVEN_DATA_DIR")
+    if data_dir:
+        return Path(data_dir)
+
+    system = platform.system()
+    home = Path.home()
+
+    if system == "Windows":
+        # Windows: %APPDATA%
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return Path(appdata) / "raven"
+        return home / "AppData" / "Roaming" / "raven"
+    else:
+        # macOS/Linux: XDG_DATA_HOME if set, otherwise ~/.config
+        xdg_data = os.environ.get("XDG_DATA_HOME")
+        if xdg_data:
+            return Path(xdg_data) / "raven"
+        return home / ".config" / "raven"
+
+
+def _find_env_file() -> Optional[Path]:
+    """Find .env file in cwd or data directory."""
+    # 1. Current working directory
+    cwd_env = Path.cwd() / ".env"
+    if cwd_env.exists():
+        return cwd_env
+
+    # 2. Data directory (~/.config/raven/)
+    data_dir = _get_data_dir()
+    data_env = data_dir / ".env"
+    if data_env.exists():
+        return data_env
 
     return None
 
