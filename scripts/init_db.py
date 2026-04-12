@@ -48,7 +48,7 @@ def init_embeddings_table(db: sqlite3.Connection) -> None:
     db.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
             paper_id INTEGER PRIMARY KEY,
-            embedding float[768],
+            embedding float[384],
             FOREIGN KEY (paper_id) REFERENCES papers(id)
         )
     """)

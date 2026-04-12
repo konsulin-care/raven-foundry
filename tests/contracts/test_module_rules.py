@@ -5,9 +5,16 @@ Run with: pytest tests/contracts/ -v
 """
 
 import inspect
+import sqlite3
+import tempfile
 from pathlib import Path
 
 import pytest
+
+import raven.embeddings
+import raven.ingestion
+import raven.llm
+from raven.storage import add_paper, init_database, search_papers
 
 # =============================================================================
 # INGESTION Module Rules (from src/raven/ingestion/AGENTS.md)
@@ -49,17 +56,10 @@ class TestIngestionModuleRules:
 
     def test_deduplication_by_doi(self):
         """INGESTION: Deduplicate using DOI before insertion."""
-        import tempfile
-        from pathlib import Path
-
-        from raven.storage import add_paper
-
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
 
             # Initialize database
-            from raven.storage import init_database
-
             init_database(db_path)
 
             # First insert should succeed
@@ -107,8 +107,6 @@ class TestEmbeddingsModuleRules:
         """EMBEDDINGS: Use 384-dimensional embeddings (multilingual-e5-small)."""
         # This would verify the model configuration
         # For now, verify the constant is defined
-        from pathlib import Path
-
         # Check for dimension constant in module or config
         embeddings_file = Path("src/raven/embeddings/__init__.py")
         if embeddings_file.exists():
@@ -118,10 +116,8 @@ class TestEmbeddingsModuleRules:
 
     def test_cpu_only_inference(self):
         """EMBEDDINGS: CPU-only inference (no GPU dependencies)."""
-        import raven.embeddings as module
-
-        if module.__file__:
-            source = Path(module.__file__).read_text()
+        if raven.embeddings.__file__:
+            source = Path(raven.embeddings.__file__).read_text()
             # Should not have CUDA/GPU-specific imports
             assert "cuda" not in source.lower()
             assert "torch.cuda" not in source
@@ -144,21 +140,17 @@ class TestLLMModuleRules:
 
     def test_caching_required(self):
         """LLM: Cache all responses."""
-        import raven.llm as module
-
         # Verify caching mechanism exists
-        source = inspect.getsource(module)
+        source = inspect.getsource(raven.llm)
         assert "cache" in source.lower() or "Cache" in source
 
     def test_no_llm_for_parsing(self):
         """LLM: Never use LLMs for parsing or embeddings."""
-        import raven.llm as module
-
         # Should not use LLM for deterministic parsing tasks
         # (This is enforced by design - LLM is for reasoning only)
         # Note: LLM should only be used for reasoning tasks (query refinement,
         # hypothesis generation, summarization), not for parsing or embeddings
-        assert hasattr(module, "query_llm")
+        assert hasattr(raven.llm, "query_llm")
 
 
 # =============================================================================
@@ -177,35 +169,22 @@ class TestStorageModuleRules:
 
     def test_wal_mode_enabled(self):
         """STORAGE: Use WAL mode for durability."""
-        import tempfile
-        from pathlib import Path
-
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
-
-            from raven.storage import init_database
 
             init_database(db_path)
 
             # Verify WAL mode
-            import sqlite3
-
-            conn = sqlite3.connect(db_path)
-            cursor = conn.execute("PRAGMA journal_mode")
-            mode = cursor.fetchone()[0]
-            conn.close()
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.execute("PRAGMA journal_mode")
+                mode = cursor.fetchone()[0]
 
             assert mode.upper() == "WAL"
 
     def test_doi_unique_constraint(self):
         """STORAGE: Enforce DOI uniqueness."""
-        import tempfile
-        from pathlib import Path
-
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
-
-            from raven.storage import add_paper, init_database
 
             init_database(db_path)
 
@@ -218,24 +197,16 @@ class TestStorageModuleRules:
 
     def test_indexes_exist(self):
         """STORAGE: Maintain indexes on DOI, type, title."""
-        import tempfile
-        from pathlib import Path
-
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
 
-            from raven.storage import init_database
-
             init_database(db_path)
 
-            import sqlite3
-
-            conn = sqlite3.connect(db_path)
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='index' ORDER BY name"
-            )
-            indexes = [row[0] for row in cursor.fetchall()]
-            conn.close()
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index' ORDER BY name"
+                )
+                indexes = [row[0] for row in cursor.fetchall()]
 
             # Should have indexes on doi, type, title
             index_names = [i.lower() for i in indexes]
@@ -254,25 +225,16 @@ class TestCLIWorkflow:
 
     def test_ingest_to_search_workflow(self):
         """Complete workflow: init -> ingest -> search."""
-        import tempfile
-        from pathlib import Path
-
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
 
             # Initialize
-            from raven.storage import init_database
-
             init_database(db_path)
 
             # Add paper directly (simulating successful ingest)
-            from raven.storage import add_paper
-
             add_paper(db_path, "10.1234/workflow", "Test Workflow Paper", "article")
 
             # Search
-            from raven.storage import search_papers
-
             results = search_papers(db_path, "workflow")
 
             assert len(results) == 1

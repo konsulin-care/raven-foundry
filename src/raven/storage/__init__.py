@@ -14,67 +14,63 @@ from typing import Any
 
 def init_database(db_path: Path) -> None:
     """Initialize the database with schema."""
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=WAL")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS papers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            doi TEXT UNIQUE NOT NULL,
-            title TEXT NOT NULL,
-            type TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS papers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doi TEXT UNIQUE NOT NULL COLLATE NOCASE,
+                title TEXT NOT NULL,
+                type TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi)
-    """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi)
+        """)
 
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_papers_type ON papers(type)
-    """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_papers_type ON papers(type)
+        """)
 
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title)
-    """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title)
+        """)
 
-    conn.commit()
-    conn.close()
+        conn.commit()
 
 
 def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
-    """Search papers by title or DOI."""
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    """Search papers by title or DOI (case-insensitive)."""
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
 
-    cursor = conn.execute(
-        """
-        SELECT doi, title, type FROM papers
-        WHERE title LIKE ? OR doi LIKE ?
-        LIMIT 50
-    """,
-        (f"%{query}%", f"%{query}%"),
-    )
+        cursor = conn.execute(
+            """
+            SELECT doi, title, type FROM papers
+            WHERE LOWER(title) LIKE LOWER(?) OR LOWER(doi) LIKE LOWER(?)
+            LIMIT 50
+        """,
+            (f"%{query}%", f"%{query}%"),
+        )
 
-    results = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+        results = [dict(row) for row in cursor.fetchall()]
 
     return results
 
 
 def add_paper(db_path: Path, doi: str, title: str, type: str = "article") -> None:
     """Add a paper to the database."""
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute(
-            """
-            INSERT INTO papers (doi, title, type) VALUES (?, ?, ?)
-        """,
-            (doi, title, type),
-        )
-        conn.commit()
-    except sqlite3.IntegrityError:
-        raise ValueError(f"Paper with DOI {doi} already exists")
-    finally:
-        conn.close()
+    with sqlite3.connect(db_path) as conn:
+        try:
+            conn.execute(
+                """
+                INSERT INTO papers (doi, title, type) VALUES (?, ?, ?)
+            """,
+                (doi, title, type),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            raise ValueError(f"Paper with DOI {doi} already exists")

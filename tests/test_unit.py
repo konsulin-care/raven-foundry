@@ -11,6 +11,17 @@ Run with: pytest tests/test_unit.py -v
 from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
+
+import raven.config
+import raven.main
+from raven.config import (
+    get_groq_api_key,
+    get_openalex_api_key,
+    get_openalex_api_url,
+)
+from raven.ingestion import ingest_paper
+from raven.storage import add_paper, init_database, search_papers
 
 # =============================================================================
 # Config Module Tests
@@ -27,12 +38,8 @@ class TestConfigModule:
 
         with patch("raven.config._find_env_file", return_value=env_file):
             # Clear cached config
-            import raven.config
-
             raven.config._config = {}
             raven.config._load_config()
-
-            from raven.config import get_groq_api_key
 
             assert get_groq_api_key() == "test-key-123"
 
@@ -42,12 +49,8 @@ class TestConfigModule:
         env_file.write_text("OTHER_KEY=value\n")
 
         with patch("raven.config._find_env_file", return_value=env_file):
-            import raven.config
-
             raven.config._config = {}
             raven.config._load_config()
-
-            from raven.config import get_groq_api_key
 
             with pytest.raises(ValueError, match="GROQ_API_KEY is not set"):
                 get_groq_api_key()
@@ -58,12 +61,8 @@ class TestConfigModule:
         env_file.write_text("OPENALEX_API_KEY=openalex-key-456\n")
 
         with patch("raven.config._find_env_file", return_value=env_file):
-            import raven.config
-
             raven.config._config = {}
             raven.config._load_config()
-
-            from raven.config import get_openalex_api_key
 
             assert get_openalex_api_key() == "openalex-key-456"
 
@@ -73,12 +72,8 @@ class TestConfigModule:
         env_file.write_text("OTHER_KEY=value\n")
 
         with patch("raven.config._find_env_file", return_value=env_file):
-            import raven.config
-
             raven.config._config = {}
             raven.config._load_config()
-
-            from raven.config import get_openalex_api_key
 
             with pytest.raises(ValueError, match="OPENALEX_API_KEY is not set"):
                 get_openalex_api_key()
@@ -89,12 +84,8 @@ class TestConfigModule:
         env_file.write_text("OPENALEX_API_KEY=test\n")  # URL not set
 
         with patch("raven.config._find_env_file", return_value=env_file):
-            import raven.config
-
             raven.config._config = {}
             raven.config._load_config()
-
-            from raven.config import get_openalex_api_url
 
             assert get_openalex_api_url() == "https://api.openalex.org"
 
@@ -106,20 +97,14 @@ class TestConfigModule:
         )
 
         with patch("raven.config._find_env_file", return_value=env_file):
-            import raven.config
-
             raven.config._config = {}
             raven.config._load_config()
-
-            from raven.config import get_openalex_api_url
 
             assert get_openalex_api_url() == "https://custom.example.com"
 
     def test_missing_env_file_returns_empty_config(self):
         """Config handles missing .env file gracefully."""
         with patch("raven.config._find_env_file", return_value=None):
-            import raven.config
-
             raven.config._config = {}
             config = raven.config._load_config()
 
@@ -136,11 +121,6 @@ class TestCLICommands:
 
     def test_search_command_no_results(self, tmp_path):
         """Test 'raven search' with no results."""
-        from click.testing import CliRunner
-
-        import raven.main
-        from raven.storage import init_database
-
         runner = CliRunner()
         db_path = tmp_path / "test.db"
         init_database(db_path)
@@ -173,9 +153,6 @@ class TestIngestionModule:
 
     def test_ingest_paper_success(self, tmp_path, requests_mock):
         """Test successful paper ingestion."""
-        from raven.ingestion import ingest_paper
-        from raven.storage import init_database
-
         mock_response = {
             "title": "Sample Research Paper",
             "type": "article",
@@ -202,9 +179,6 @@ class TestIngestionModule:
 
     def test_ingest_paper_not_found(self, tmp_path, requests_mock):
         """Test ingestion returns None when paper not found."""
-        from raven.ingestion import ingest_paper
-        from raven.storage import init_database
-
         db_path = tmp_path / "test.db"
         init_database(db_path)
 
@@ -224,9 +198,6 @@ class TestIngestionModule:
 
     def test_doi_cleaning_https_doi_org(self, tmp_path, requests_mock):
         """Test DOI cleaning removes https://doi.org/ prefix."""
-        from raven.ingestion import ingest_paper
-        from raven.storage import init_database
-
         mock_response = {"title": "Test", "type": "article"}
 
         db_path = tmp_path / "test.db"
@@ -250,9 +221,6 @@ class TestIngestionModule:
 
     def test_doi_cleaning_doi_prefix(self, tmp_path, requests_mock):
         """Test DOI cleaning removes doi: prefix."""
-        from raven.ingestion import ingest_paper
-        from raven.storage import init_database
-
         mock_response = {"title": "Test", "type": "article"}
 
         db_path = tmp_path / "test.db"
@@ -285,8 +253,6 @@ class TestStorageModule:
 
     def test_search_case_insensitive(self, tmp_path):
         """Test search is case insensitive."""
-        from raven.storage import add_paper, init_database, search_papers
-
         db_path = tmp_path / "test.db"
         init_database(db_path)
         add_paper(db_path, "10.1234/test", "UPPERCASE Title", "article")
@@ -299,8 +265,6 @@ class TestStorageModule:
 
     def test_search_returns_limited_results(self, tmp_path):
         """Test search limits results to 50."""
-        from raven.storage import add_paper, init_database, search_papers
-
         db_path = tmp_path / "test.db"
         init_database(db_path)
 

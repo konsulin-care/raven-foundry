@@ -30,3 +30,43 @@ Module-specific rules are defined in `src/raven/*/AGENTS.md` files:
 - @src/raven/embeddings/AGENTS.md: Handles semantic embedding generation
 - @src/raven/llm/AGENTS.md: Handles all LLM interactions via Groq
 - @src/raven/storage/AGENTS.md: Manages SQLite database and vector storage
+
+Anti-Pattern Rules (detected via Context7):
+
+1. **Mutable Default Arguments**: Never use mutable objects (list, dict) as default arguments. Use `None` and initialize inside the function.
+   ```python
+   # WRONG
+   def foo(mydict={}): ...
+   # CORRECT
+   def foo(mydict=None):
+       if mydict is None: mydict = {}
+   ```
+
+2. **SQLite Connection Leaks**: Always use context managers (`with` statement) for sqlite3 connections to ensure proper closure.
+   ```python
+   # WRONG
+   conn = sqlite3.connect(db)
+   # ... use conn ...
+   conn.close()
+   # CORRECT
+   with sqlite3.connect(db) as conn:
+       # ... use conn ...
+   ```
+
+3. **Embedding Dimensionality Mismatch**: Embedding dimension must match the model (384 for multilingual-e5-small). Do not hardcode mismatched dimensions in schema.
+
+4. **Case-Sensitive DOI Matching**: Use `COLLATE NOCASE` for DOI columns and `LOWER()` in queries to ensure case-insensitive matching (DOIs are case-insensitive).
+
+5. **Local Imports in Tests**: Move all imports to module level. Local imports inside functions are harder to mock and hurt test readability.
+   ```python
+   # WRONG (inside test method)
+   def test_something(self):
+       from module import function
+       function()
+
+   # CORRECT (at module top)
+   from module import function
+
+   def test_something(self):
+       function()
+   ```
