@@ -17,6 +17,7 @@ Rules:
 - Ensure ingestion integrates cleanly with CLI workflow
 """
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -45,14 +46,22 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
         doi = doi.replace("doi:", "")
 
     # Query OpenAlex API (requires doi: prefix)
-    url = f"{base_url}/works/doi:{doi}"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    response = requests.get(url, headers=headers, timeout=30)
-
-    if response.status_code != 200:
+    url = f"{base_url}/works/doi:{doi}?api_key={api_key}"
+    try:
+        response = requests.get(url, timeout=30)
+    except requests.exceptions.RequestException as e:
+        print(f"Network error fetching paper: {e}")
         return None
 
-    data = response.json()
+    if response.status_code != 200:
+        print(f"OpenAlex API error: status {response.status_code}")
+        return None
+
+    try:
+        data = response.json()
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"Failed to parse response: {e}")
+        return None
 
     # Extract metadata
     title = data.get("title", "Untitled")
