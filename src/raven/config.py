@@ -108,8 +108,11 @@ def _load_config(env_path: Optional[Path] = None) -> dict[str, str]:
     Note:
         Loaded values are propagated to os.environ to ensure consistency
         across the application (e.g., _get_data_dir() reads RAVEN_DATA_DIR).
+        Results are cached after first load.
     """
     global _config
+    if _config:  # Already loaded - return cached
+        return _config
 
     env_path = _find_env_file(env_path)
 

@@ -32,9 +32,7 @@ class TestIngestionModuleRules:
 
     def test_no_llm_in_ingestion_module(self):
         """INGESTION: Do not use LLMs in this module."""
-        import raven.ingestion as module
-
-        source = inspect.getsource(module)
+        source = inspect.getsource(raven.ingestion)
 
         # Verify no LLM imports (check import statements only, not docstrings)
         # Split source to separate imports from code

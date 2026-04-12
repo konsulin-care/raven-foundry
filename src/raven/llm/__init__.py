@@ -14,33 +14,47 @@ Rules (from AGENTS.md):
 - Route long-running tasks through scheduler when needed
 """
 
-import json
-from typing import Any, cast
+import logging
 
 import groq
 
-# Import config for future Groq API integration
-from raven.config import get_groq_api_key, get_groq_model  # noqa: F401
+from raven.config import get_groq_api_key, get_groq_model
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Groq configuration
 GROQ_MODEL = get_groq_model()
 RATE_LIMIT_PER_DAY = 1000
 TPM_LIMIT = 10000  # tokens per minute (example)
 
+# Singleton client
+_client: groq.Groq | None = None
 
-# Simple in-memory cache (replace with persistent cache for production)
-_response_cache: dict[str, Any] = {}
+
+def _get_client() -> groq.Groq:
+    """Get or create the singleton Groq client."""
+    global _client
+    if _client is None:
+        api_key = get_groq_api_key()
+        _client = groq.Groq(api_key=api_key)
+    return _client
+
+
+# Simple in-memory cache with max size
+_MAX_CACHE_SIZE = 1000
+_response_cache: dict[str, str] = {}
 
 
 def query_llm(prompt: str, system_prompt: str | None = None) -> str:
     """Query the LLM with a prompt."""
     # Validate API key - raises ValueError if falsy
-    api_key = get_groq_api_key()
+    get_groq_api_key()
 
-    # Check cache first
-    cache_key = json.dumps({"prompt": prompt, "system": system_prompt})
+    # Check cache first (using hash for fast key lookup)
+    cache_key = f"{hash(prompt)}:{hash(system_prompt or '')}"
     if cache_key in _response_cache:
-        return cast(str, _response_cache[cache_key])
+        return _response_cache[cache_key]
 
     # Build messages
     messages: list[dict[str, str]] = []
@@ -48,8 +62,8 @@ def query_llm(prompt: str, system_prompt: str | None = None) -> str:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    # Create Groq client and make request
-    client = groq.Groq(api_key=api_key)
+    # Use singleton client
+    client = _get_client()
     chat_completion = client.chat.completions.create(
         model=GROQ_MODEL,
         messages=messages,  # type: ignore[arg-type]
@@ -58,10 +72,16 @@ def query_llm(prompt: str, system_prompt: str | None = None) -> str:
     # Extract response content
     message = chat_completion.choices[0].message
     if message.content is None:
+        logger.error("Empty response from Groq API for prompt: %s", prompt[:50])
         raise ValueError("Empty response from Groq API")
-    content = cast(str, message.content)
+    content: str = message.content
 
-    # Cache the response
+    # Cache the response (with size limit)
+    if len(_response_cache) >= _MAX_CACHE_SIZE:
+        # Clear oldest entries (simple FIFO)
+        oldest_keys = list(_response_cache.keys())[: _MAX_CACHE_SIZE // 2]
+        for key in oldest_keys:
+            del _response_cache[key]
     _response_cache[cache_key] = content
 
     return content

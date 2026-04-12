@@ -17,7 +17,7 @@ Rules:
 - Ensure ingestion integrates cleanly with CLI workflow
 """
 
-import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,9 @@ import requests
 
 from raven.config import get_openalex_api_key, get_openalex_api_url
 from raven.storage import add_paper
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 def _get_openalex_base_url() -> str:
@@ -50,17 +53,17 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
     try:
         response = requests.get(url, timeout=30)
     except requests.exceptions.RequestException as e:
-        print(f"Network error fetching paper: {e}")
+        logger.error("Network error fetching paper: %s", e)
         return None
 
     if response.status_code != 200:
-        print(f"OpenAlex API error: status {response.status_code}")
+        logger.error("OpenAlex API error: status %s", response.status_code)
         return None
 
     try:
         data = response.json()
-    except (ValueError, json.JSONDecodeError) as e:
-        print(f"Failed to parse response: {e}")
+    except requests.exceptions.JSONDecodeError as e:
+        logger.error("Failed to parse response: %s", e)
         return None
 
     # Extract metadata
