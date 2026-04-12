@@ -236,6 +236,27 @@ class TestCLICommands:
         assert result.exit_code == 0
         assert "Total papers indexed: 1" in result.output
 
+    def test_info_command_db_exists_but_no_papers_table(self, tmp_path, monkeypatch):
+        """Test 'raven info' when DB exists but lacks papers table."""
+        import sqlite3
+
+        runner = CliRunner()
+        db_path = tmp_path / "raven.db"
+
+        # Create database with a table other than 'papers'
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT, value TEXT)")
+            conn.commit()
+
+        # Patch where _get_data_dir is used in main.py
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        result = runner.invoke(raven.main.cli, ["info", "--db", str(db_path)])
+
+        assert result.exit_code == 0
+        assert "'papers' table not found" in result.output
+        assert "Total papers indexed: 0" in result.output
+
 
 # =============================================================================
 # Ingestion Module Tests with HTTP Mocking

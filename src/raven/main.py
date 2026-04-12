@@ -183,9 +183,15 @@ def info(ctx: click.Context, db: Optional[Path], env: Optional[Path]) -> None:
     # Get total unique DOIs
     total_papers = 0
     if db_path.exists():
-        with sqlite3.connect(db_path) as conn:
-            cursor = conn.execute("SELECT COUNT(DISTINCT doi) FROM papers")
-            total_papers = cursor.fetchone()[0]
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.execute("SELECT COUNT(DISTINCT doi) FROM papers")
+                total_papers = cursor.fetchone()[0]
+        except sqlite3.OperationalError:
+            click.echo(
+                "Warning: Database exists but 'papers' table not found.", err=True
+            )
+            total_papers = 0
 
     click.echo(f"Version: {_get_version()}")
     click.echo(f"Data directory: {data_dir}")
