@@ -2,6 +2,9 @@
 
 Model: GPT OSS 120B
 
+Environment (from .env):
+- GROQ_API_KEY: Required. Get from https://console.groq.com/
+
 Rules (from AGENTS.md):
 - Batch requests whenever possible
 - Cache all responses
@@ -12,6 +15,9 @@ Rules (from AGENTS.md):
 
 import json
 from typing import Any, cast
+
+# Import config for future Groq API integration
+from raven.config import get_groq_api_key  # noqa: F401
 
 # Groq configuration
 GROQ_MODEL = "llama-3.1-70b-versatile"
