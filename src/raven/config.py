@@ -9,7 +9,7 @@ from typing import Optional
 DEFAULT_OPENALEX_API_URL = "https://api.openalex.org"
 
 # Global config cache
-_config: dict = {}
+_config: dict[str, str] = {}
 
 
 def _get_data_dir() -> Path:
@@ -59,9 +59,9 @@ def _find_env_file() -> Optional[Path]:
     return None
 
 
-def _parse_env_file(env_path: Path) -> dict:
+def _parse_env_file(env_path: Path) -> dict[str, str]:
     """Parse .env file and return dict of key-value pairs."""
-    config = {}
+    config: dict[str, str] = {}
 
     if not env_path.exists():
         return config
@@ -81,7 +81,7 @@ def _parse_env_file(env_path: Path) -> dict:
     return config
 
 
-def _load_config() -> dict:
+def _load_config() -> dict[str, str]:
     """Load configuration from .env file."""
     global _config
 

@@ -110,6 +110,52 @@ class TestConfigModule:
 
             assert config == {}
 
+    def test_get_data_dir_from_environment(self, monkeypatch):
+        """Config uses RAVEN_DATA_DIR when set."""
+        monkeypatch.setenv("RAVEN_DATA_DIR", "/custom/data/path")
+        raven.config._config = {}  # Reset
+
+        data_dir = raven.config._get_data_dir()
+        assert str(data_dir) == "/custom/data/path"
+
+    def test_get_data_dir_with_xdg_home(self, monkeypatch):
+        """Config uses XDG_DATA_HOME when set."""
+        monkeypatch.delenv("RAVEN_DATA_DIR", raising=False)
+        monkeypatch.setenv("XDG_DATA_HOME", "/custom/xdg")
+        raven.config._config = {}  # Reset
+
+        data_dir = raven.config._get_data_dir()
+        assert str(data_dir) == "/custom/xdg/raven"
+
+    def test_find_env_file_in_cwd(self, tmp_path, monkeypatch):
+        """Config finds .env in current working directory."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("OPENALEX_API_KEY=test\n")
+
+        # Create a subdirectory and change cwd
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        monkeypatch.chdir(subdir)
+
+        result = raven.config._find_env_file()
+        assert result is not None
+        assert result.name == ".env"
+
+    def test_parse_env_file_with_comments(self, tmp_path):
+        """Config correctly parses .env with comments and blank lines."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("# This is a comment\n\nKEY=value\n# Another comment\n")
+
+        result = raven.config._parse_env_file(env_file)
+        assert result == {"KEY": "value"}
+
+    def test_parse_env_file_missing_file(self, tmp_path):
+        """Config handles missing .env file in _parse_env_file."""
+        env_file = tmp_path / "nonexistent.env"
+
+        result = raven.config._parse_env_file(env_file)
+        assert result == {}
+
 
 # =============================================================================
 # CLI Tests using Click CliRunner
@@ -125,22 +171,70 @@ class TestCLICommands:
         db_path = tmp_path / "test.db"
         init_database(db_path)
 
+        # Use --db option to pass custom path
         result = runner.invoke(
-            raven.main.cli, ["search", "nonexistent"], obj={"DB_PATH": db_path}
+            raven.main.cli, ["--db", str(db_path), "search", "nonexistent"]
         )
 
         assert result.exit_code == 0
         assert "No results found" in result.output
 
-    @pytest.mark.skip(reason="CLI ingest patches not work reliably")
-    def test_ingest_command_success(self, requests_mock):
-        """Test 'raven ingest' successfully ingests a paper."""
-        pass
+    def test_search_command_with_results(self, tmp_path):
+        """Test 'raven search' with results."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+        add_paper(db_path, "10.1234/test", "Test Paper Title", "article")
 
-    @pytest.mark.skip(reason="CLI ingest patches not work reliably")
-    def test_ingest_command_failure(self, requests_mock):
-        """Test 'raven ingest' handles API failure."""
-        pass
+        # Use --db option to pass custom path
+        result = runner.invoke(raven.main.cli, ["--db", str(db_path), "search", "test"])
+
+        assert result.exit_code == 0
+        assert "Test Paper Title" in result.output
+        assert "10.1234/test" in result.output
+        assert "article" in result.output
+
+    def test_init_command(self, tmp_path):
+        """Test 'raven init' creates database."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Use --db option to pass custom path
+        result = runner.invoke(raven.main.cli, ["--db", str(db_path), "init"])
+
+        assert result.exit_code == 0
+        assert "Database initialized" in result.output
+        assert db_path.exists()
+
+    def test_info_command_no_db(self, tmp_path, monkeypatch):
+        """Test 'raven info' when no database exists."""
+        runner = CliRunner()
+        db_path = tmp_path / "nonexistent.db"
+
+        # Patch where _get_data_dir is used in main.py
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        result = runner.invoke(raven.main.cli, ["--db", str(db_path), "info"])
+
+        assert result.exit_code == 0
+        assert "Version:" in result.output
+        assert "Total papers indexed: 0" in result.output
+
+    def test_info_command_with_papers(self, tmp_path, monkeypatch):
+        """Test 'raven info' with papers in database."""
+        runner = CliRunner()
+        # info command uses data_dir / "raven.db" by default
+        db_path = tmp_path / "raven.db"
+        init_database(db_path)
+        add_paper(db_path, "10.1234/test", "Test Paper", "article")
+
+        # Patch where _get_data_dir is used in main.py
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        result = runner.invoke(raven.main.cli, ["--db", str(db_path), "info"])
+
+        assert result.exit_code == 0
+        assert "Total papers indexed: 1" in result.output
 
 
 # =============================================================================
@@ -149,9 +243,14 @@ class TestCLICommands:
 
 
 class TestIngestionModule:
-    """Tests for raven.ingestion module."""
+    """Tests for raven.ingestion module.
 
-    def test_ingest_paper_success(self, tmp_path, requests_mock):
+    These tests use monkeypatch to set environment variables,
+    which is more robust than patching functions because it
+    works regardless of where functions are imported.
+    """
+
+    def test_ingest_paper_success(self, tmp_path, requests_mock, monkeypatch):
         """Test successful paper ingestion."""
         mock_response = {
             "title": "Sample Research Paper",
@@ -166,18 +265,17 @@ class TestIngestionModule:
             json=mock_response,
         )
 
-        with patch("raven.config.get_openalex_api_key", return_value="test-key"):
-            with patch(
-                "raven.config.get_openalex_api_url",
-                return_value="https://api.openalex.org",
-            ):
-                result = ingest_paper(db_path, "10.1234/sample")
+        # Use monkeypatch to set environment variables (more robust)
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        result = ingest_paper(db_path, "10.1234/sample")
 
         assert result is not None
         assert result["title"] == "Sample Research Paper"
         assert result["type"] == "article"
 
-    def test_ingest_paper_not_found(self, tmp_path, requests_mock):
+    def test_ingest_paper_not_found(self, tmp_path, requests_mock, monkeypatch):
         """Test ingestion returns None when paper not found."""
         db_path = tmp_path / "test.db"
         init_database(db_path)
@@ -187,16 +285,14 @@ class TestIngestionModule:
             status_code=404,
         )
 
-        with patch("raven.config.get_openalex_api_key", return_value="test-key"):
-            with patch(
-                "raven.config.get_openalex_api_url",
-                return_value="https://api.openalex.org",
-            ):
-                result = ingest_paper(db_path, "10.9999/missing")
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        result = ingest_paper(db_path, "10.9999/missing")
 
         assert result is None
 
-    def test_doi_cleaning_https_doi_org(self, tmp_path, requests_mock):
+    def test_doi_cleaning_https_doi_org(self, tmp_path, requests_mock, monkeypatch):
         """Test DOI cleaning removes https://doi.org/ prefix."""
         mock_response = {"title": "Test", "type": "article"}
 
@@ -209,17 +305,15 @@ class TestIngestionModule:
             json=mock_response,
         )
 
-        with patch("raven.config.get_openalex_api_key", return_value="test-key"):
-            with patch(
-                "raven.config.get_openalex_api_url",
-                return_value="https://api.openalex.org",
-            ):
-                # Test with URL prefix - should be cleaned to just DOI
-                result = ingest_paper(db_path, "https://doi.org/10.1234/test")
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        # Test with URL prefix - should be cleaned to just DOI
+        result = ingest_paper(db_path, "https://doi.org/10.1234/test")
 
         assert result is not None
 
-    def test_doi_cleaning_doi_prefix(self, tmp_path, requests_mock):
+    def test_doi_cleaning_doi_prefix(self, tmp_path, requests_mock, monkeypatch):
         """Test DOI cleaning removes doi: prefix."""
         mock_response = {"title": "Test", "type": "article"}
 
@@ -232,12 +326,10 @@ class TestIngestionModule:
             json=mock_response,
         )
 
-        with patch("raven.config.get_openalex_api_key", return_value="test-key"):
-            with patch(
-                "raven.config.get_openalex_api_url",
-                return_value="https://api.openalex.org",
-            ):
-                result = ingest_paper(db_path, "doi:10.1234/prefix")
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        result = ingest_paper(db_path, "doi:10.1234/prefix")
 
         assert result is not None
         assert result["doi"] == "10.1234/prefix"

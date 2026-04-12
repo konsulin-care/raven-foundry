@@ -17,4 +17,4 @@ Implementation:
 - Use raven.config.get_openalex_api_url() to get API URL (with default)
 - Configuration is loaded from .env file in project root
 - Raises ValueError if OPENALEX_API_KEY is not set
-- Pass Bearer token as a parameter when sending a request, e.g. `GET "https://api.openalex.org/works?api_key=YOUR_KEY"`
+- Pass the `api_key` query  parameter when sending a request, e.g. `GET "https://api.openalex.org/works?api_key=YOUR_KEY"`

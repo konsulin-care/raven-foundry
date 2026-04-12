@@ -1,7 +1,19 @@
 # Pre-commit hooks for Raven Foundry
+# Mirrors CI safeguard checks: spec → lint → tests → coverage
 # Run: pip install pre-commit && pre-commit install
 
 repos:
+  # Layer 1: Specification Compliance
+  - repo: local
+    hooks:
+      - id: verify-spec-files
+        name: Verify spec files exist
+        entry: bash -c "ls src/raven/*/AGENTS.md >/dev/null 2>&1 && test -f STANDARDS.md"
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  # Layer 2: Lint & Type Check
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -17,14 +29,25 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  # Skip mypy in pre-commit due to egg-info false positives
-  # Run 'make type' manually instead
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.0
+    hooks:
+      - id: mypy
+        # Only check src/ like CI does (not tests/)
+        args: [--ignore-missing-imports, src/]
+        files: ^src/
+        pass_filenames: false
+        types: []
+        # Install type stubs for external dependencies
+        additional_dependencies: [types-requests]
 
+  # Layer 3: Full Tests (combines contract + coverage)
+  # Note: Use --cov=raven (module name) not --cov=src/ (path) for editable installs
   - repo: local
     hooks:
-      - id: pytest
-        name: pytest
-        entry: pytest tests/ -v --tb=short
+      - id: pytest-full
+        name: Tests with coverage
+        entry: pytest tests/ --cov=raven --cov-report=term-missing --cov-fail-under=80 -v --tb=short
         language: system
         pass_filenames: false
         always_run: true

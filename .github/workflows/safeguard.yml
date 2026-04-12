@@ -1,5 +1,5 @@
 # CI Pipeline for Raven Foundry
-# Runs all safeguard checks on every push and PR
+# Runs all safeguard checks on every open PR to the `master` branch
 
 name: Safeguard Checks
 
@@ -90,5 +90,5 @@ jobs:
 
       - name: Enforce coverage threshold
         run: |
-          pytest tests/ --cov=src/ --cov-fail-under=80 || \
+          pytest tests/ --cov=src/ --cov-fail-under=80 && echo "Coverage: 80%+ met" || \
           (echo "Coverage below 80%" && exit 1)
