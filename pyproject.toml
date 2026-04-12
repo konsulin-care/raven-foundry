@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Raven Team", email = "team@ravenfoundry.dev"}
+    {name = "Konsulin Care", email = "hello@konsulin.care"}
 ]
 keywords = ["research", "academic", "knowledge", "curation", "cli"]
 classifiers = [

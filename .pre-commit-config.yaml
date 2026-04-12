@@ -19,3 +19,12 @@ repos:
 
   # Skip mypy in pre-commit due to egg-info false positives
   # Run 'make type' manually instead
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: pytest tests/ -v --tb=short
+        language: system
+        pass_filenames: false
+        always_run: true

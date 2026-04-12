@@ -29,13 +29,23 @@ class TestIngestionModuleRules:
 
         source = inspect.getsource(module)
 
-        # Verify no LLM imports
-        assert "groq" not in source, "ingestion must not import groq"
-        assert "ChatCompletion" not in source
-        assert (
-            "llm" not in source.lower()
-            or "llm" in source.lower() == "fullname" not in source
-        )
+        # Verify no LLM imports (check import statements only, not docstrings)
+        # Split source to separate imports from code
+        source_lines = source.split("\n")
+        import_lines = [
+            ln for ln in source_lines if ln.startswith(("import ", "from "))
+        ]
+
+        # Check for LLM-related imports
+        for line in import_lines:
+            line_lower = line.lower()
+            assert "groq" not in line_lower, f"ingestion must not import groq: {line}"
+            assert "openai" not in line_lower, (
+                f"ingestion must not import openai: {line}"
+            )
+            assert "chatcompletion" not in line_lower, (
+                f"ingestion must not use ChatCompletion: {line}"
+            )
 
     def test_deduplication_by_doi(self):
         """INGESTION: Deduplicate using DOI before insertion."""

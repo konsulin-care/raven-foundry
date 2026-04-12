@@ -4,10 +4,9 @@
 name: Safeguard Checks
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [master]
+    types: [opened, synchronize, reopened]
 
 jobs:
   layer1-spec:
