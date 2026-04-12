@@ -17,6 +17,8 @@ Rules (from AGENTS.md):
 import json
 from typing import Any, cast
 
+import groq
+
 # Import config for future Groq API integration
 from raven.config import get_groq_api_key, get_groq_model  # noqa: F401
 
@@ -32,23 +34,49 @@ _response_cache: dict[str, Any] = {}
 
 def query_llm(prompt: str, system_prompt: str | None = None) -> str:
     """Query the LLM with a prompt."""
+    # Validate API key - raises ValueError if falsy
+    api_key = get_groq_api_key()
+
     # Check cache first
     cache_key = json.dumps({"prompt": prompt, "system": system_prompt})
     if cache_key in _response_cache:
         return cast(str, _response_cache[cache_key])
 
-    # TODO: Implement actual Groq API call
-    # - Respect rate limits
-    # - Batch requests when possible
-    # - Cache responses
-    raise NotImplementedError("LLM integration not yet implemented")
+    # Build messages
+    messages: list[dict[str, str]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    # Create Groq client and make request
+    client = groq.Groq(api_key=api_key)
+    chat_completion = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=messages,  # type: ignore[arg-type]
+    )
+
+    # Extract response content
+    message = chat_completion.choices[0].message
+    if message.content is None:
+        raise ValueError("Empty response from Groq API")
+    content = cast(str, message.content)
+
+    # Cache the response
+    _response_cache[cache_key] = content
+
+    return content
 
 
 def query_llm_batch(prompts: list[str], system_prompt: str | None = None) -> list[str]:
-    """Query the LLM with multiple prompts (batch processing)."""
-    # Per AGENTS.md: Batch requests whenever possible
-    # This should process multiple prompts in a single request
-    raise NotImplementedError("Batch LLM not yet implemented")
+    """Query the LLM with multiple prompts (batch processing).
+
+    Processes each prompt via query_llm, which caches results per prompt.
+    """
+    # Validate API key - raises ValueError if falsy
+    get_groq_api_key()
+
+    # Map over prompts, allowing per-prompt caching
+    return [query_llm(prompt, system_prompt) for prompt in prompts]
 
 
 def generate_summary(text: str) -> str:
