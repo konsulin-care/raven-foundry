@@ -43,14 +43,30 @@ def _get_data_dir() -> Path:
         return home / ".config" / "raven"
 
 
-def _find_env_file() -> Optional[Path]:
-    """Find .env file in cwd or data directory."""
-    # 1. Current working directory
+def _find_env_file(env_path: Optional[Path] = None) -> Optional[Path]:
+    """Find .env file.
+
+    Args:
+        env_path: Explicit path to .env file. If provided and exists, use it directly.
+                If None, falls back to default logic:
+                - Check cwd/.env first
+                - Fall back to data_dir/.env
+
+    Returns:
+        Path to .env file if found, None otherwise.
+    """
+    # 1. User-provided explicit path
+    if env_path is not None:
+        if env_path.exists() and env_path.is_file():
+            return env_path
+        return None
+
+    # 2. Default: cwd/.env
     cwd_env = Path.cwd() / ".env"
     if cwd_env.exists():
         return cwd_env
 
-    # 2. Data directory (~/.config/raven/)
+    # 3. Default: data_dir/.env
     data_dir = _get_data_dir()
     data_env = data_dir / ".env"
     if data_env.exists():
@@ -81,14 +97,16 @@ def _parse_env_file(env_path: Path) -> dict[str, str]:
     return config
 
 
-def _load_config() -> dict[str, str]:
-    """Load configuration from .env file."""
+def _load_config(env_path: Optional[Path] = None) -> dict[str, str]:
+    """Load configuration from .env file.
+
+    Args:
+        env_path: Explicit path to .env file. If provided and exists, use it.
+                If None, uses default logic (cwd/.env → data_dir/.env).
+    """
     global _config
 
-    if _config:
-        return _config
-
-    env_path = _find_env_file()
+    env_path = _find_env_file(env_path)
 
     if env_path:
         _config = _parse_env_file(env_path)

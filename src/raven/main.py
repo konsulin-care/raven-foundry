@@ -28,11 +28,19 @@ def _get_version() -> str:
     default=DEFAULT_DB_PATH,
     help="Path to the database file.",
 )
+@click.option(
+    "--env",
+    "-e",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    default=None,
+    help="Path to .env file (default: cwd/.env → RAVEN_DATA_DIR/.env)",
+)
 @click.pass_context
-def cli(ctx: click.Context, db: Path) -> None:
+def cli(ctx: click.Context, db: Path, env: Path) -> None:
     """Raven - Offline-first CLI research system for academic knowledge curation."""
     ctx.ensure_object(dict)
     ctx.obj["DB_PATH"] = db
+    ctx.obj["ENV_PATH"] = env
 
 
 @cli.command()
@@ -40,7 +48,11 @@ def cli(ctx: click.Context, db: Path) -> None:
 @click.pass_context
 def search(ctx: click.Context, query: str) -> None:
     """Search publications by query string."""
+    from raven.config import _load_config
     from raven.storage import search_papers
+
+    env_path = ctx.obj.get("ENV_PATH")
+    _load_config(env_path)
 
     db_path = ctx.obj["DB_PATH"]
     if not db_path.parent.exists():
@@ -64,7 +76,11 @@ def search(ctx: click.Context, query: str) -> None:
 @click.pass_context
 def ingest(ctx: click.Context, doi: str) -> None:
     """Ingest a publication by DOI."""
+    from raven.config import _load_config
     from raven.ingestion import ingest_paper
+
+    env_path = ctx.obj.get("ENV_PATH")
+    _load_config(env_path)
 
     db_path = ctx.obj["DB_PATH"]
     if not db_path.parent.exists():
