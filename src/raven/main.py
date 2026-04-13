@@ -200,4 +200,4 @@ def info(ctx: click.Context, db: Optional[Path], env: Optional[Path]) -> None:
 
 
 if __name__ == "__main__":
-    cli()
+    cli.main(standalone_mode=False)

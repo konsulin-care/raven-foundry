@@ -61,7 +61,7 @@ def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
     return results
 
 
-def add_paper(db_path: Path, doi: str, title: str, type: str = "article") -> None:
+def add_paper(db_path: Path, doi: str, title: str, paper_type: str = "article") -> None:
     """Add a paper to the database."""
     with sqlite3.connect(db_path) as conn:
         try:
@@ -69,7 +69,7 @@ def add_paper(db_path: Path, doi: str, title: str, type: str = "article") -> Non
                 """
                 INSERT INTO papers (doi, title, type) VALUES (?, ?, ?)
             """,
-                (doi, title, type),
+                (doi, title, paper_type),
             )
             conn.commit()
         except sqlite3.IntegrityError as e:
