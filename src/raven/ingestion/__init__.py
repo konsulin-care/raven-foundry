@@ -42,7 +42,7 @@ def _create_session_with_retries() -> requests.Session:
         allowed_methods=["GET"],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
+    # Only use HTTPS - never fallback to insecure HTTP
     session.mount("https://", adapter)
     return session
 
