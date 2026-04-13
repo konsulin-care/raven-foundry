@@ -1,4 +1,4 @@
-<!-- Context: project-intelligence/technical | Priority: critical | Version: 1.1 | Updated: 2026-04-13 -->
+<!-- Context: project-intelligence/technical | Priority: critical | Version: 1.2 | Updated: 2026-04-13 -->
 
 # Technical Domain
 
@@ -96,6 +96,49 @@ DEFAULT_FILTERS = "is_oa:true,has_doi:true"  # full filters for keyword
 SEMANTIC_RATE_LIMIT = 1  # requests/sec for semantic search
 ```
 
+## OpenAlex Abstract Reconstruction
+### Undo Inverted Index (O(n) vs O(n log n))
+```python
+def undo_inverted_index(inverted_index: dict[str, list[int]]) -> str:
+    """Reconstruct original text from OpenAlex abstract_inverted_index.
+
+    Optimized: O(n) using direct indexing instead of sorting O(n log n).
+    """
+    if not inverted_index:
+        return ""
+
+    max_index = max(max(positions) for positions in inverted_index.values())
+    result = [None] * (max_index + 1)
+
+    for word, positions in inverted_index.items():
+        for pos in positions:
+            result[pos] = word
+
+    return " ".join(word for word in result if word is not None)
+```
+
+### format_search_result (includes abstract)
+```python
+def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
+    """Format OpenAlex work result - includes DOI, Year, Type, Citation, OA, Abstract."""
+    abstract = ""
+    abstract_inverted = work.get("abstract_inverted_index")
+    if abstract_inverted:
+        abstract = undo_inverted_index(abstract_inverted)
+
+    return {
+        "doi": work.get("doi"),
+        "title": work.get("title", "Untitled"),
+        "type": work.get("type", "article"),
+        "publication_year": work.get("publication_year"),
+        "cited_by_count": work.get("cited_by_count", 0),
+        "open_access": work.get("open_access", {}).get("is_oa", False),
+        "abstract": abstract,  # NEW: Reconstructed from inverted index
+        "id": work.get("id"),
+        "relevance_score": work.get("relevance_score"),
+    }
+```
+
 ## Security Requirements
 - API keys in environment variables, never in code
 - Input validation on all CLI arguments
@@ -108,7 +151,7 @@ SEMANTIC_RATE_LIMIT = 1  # requests/sec for semantic search
 - `src/raven/main.py` - CLI entry point with Click commands
 - `src/raven/config.py` - Environment config loading from .env
 - `src/raven/storage/__init__.py` - SQLite with WAL mode, indexes
-- `src/raven/ingestion/__init__.py` - OpenAlex API with retry logic
+- `src/raven/ingestion/__init__.py` - OpenAlex API, abstract reconstruction
 - `src/raven/llm/__init__.py` - Groq client with in-memory cache
 - `src/raven/embeddings/__init__.py` - Placeholder for vector embeddings
 

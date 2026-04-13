@@ -28,6 +28,7 @@ from raven.ingestion import (
     ingest_paper,
     search_works,
     search_works_keyword,
+    undo_inverted_index,
 )
 from raven.storage import add_paper, init_database, search_papers
 
@@ -825,3 +826,106 @@ class TestOpenAlexSearch:
         )
 
         assert result["search_type"] == "keyword"
+
+
+# =============================================================================
+# Undo Inverted Index Tests
+# =============================================================================
+
+
+class TestUndoInvertedIndex:
+    """Tests for undo_inverted_index function."""
+
+    # Sample inverted index for testing
+    SAMPLE_INVERTED_INDEX = {
+        "Hello": [0],
+        "world": [1],
+        "this": [2, 5],
+        "is": [3],
+        "a": [4],
+        "test": [6],
+    }
+
+    def test_undo_inverted_index_basic(self):
+        """Reconstructs basic text from inverted index."""
+        result = undo_inverted_index(self.SAMPLE_INVERTED_INDEX)
+
+        # Note: "this" appears at positions [2, 5], so it appears twice
+        assert result == "Hello world this is a this test"
+
+    def test_undo_inverted_index_with_example_from_user(self):
+        """Test with the example provided in the task."""
+        # Use a smaller sample from the user's example
+        sample_index = {
+            "Despite": [0],
+            "growing": [1],
+            "interest": [2],
+            "in": [3],
+            "Open": [4],
+            "Access": [5],
+        }
+
+        result = undo_inverted_index(sample_index)
+
+        assert result == "Despite growing interest in Open Access"
+
+    def test_undo_inverted_index_empty_dict(self):
+        """Handles empty dictionary."""
+        result = undo_inverted_index({})
+
+        assert result == ""
+
+    def test_undo_inverted_index_preserves_word_order(self):
+        """Correctly orders words by their positions."""
+        # Same word at multiple positions
+        multi_position_index = {
+            "the": [0, 3, 6],
+            "cat": [1],
+            "sat": [2],
+            "on": [4],
+            "mat": [5],
+        }
+
+        result = undo_inverted_index(multi_position_index)
+
+        # "the" appears at positions 0, 3, 6
+        assert result == "the cat sat the on mat the"
+
+    def test_format_search_result_with_abstract(self):
+        """format_search_result includes reconstructed abstract."""
+        work = {
+            "doi": "10.1234/test",
+            "title": "Test Paper",
+            "type": "article",
+            "publication_year": 2023,
+            "cited_by_count": 50,
+            "open_access": {"is_oa": True},
+            "abstract_inverted_index": {
+                "This": [0],
+                "is": [1],
+                "abstract": [2],
+            },
+        }
+
+        result = format_search_result(work)
+
+        assert result["abstract"] == "This is abstract"
+        assert result["doi"] == "10.1234/test"
+        assert result["publication_year"] == 2023
+        assert result["type"] == "article"
+        assert result["cited_by_count"] == 50
+        assert result["open_access"] is True
+
+    def test_format_search_result_without_abstract(self):
+        """format_search_result handles missing abstract_inverted_index."""
+        work = {
+            "doi": "10.1234/test",
+            "title": "Test Paper",
+            "type": "article",
+            "publication_year": 2023,
+        }
+
+        result = format_search_result(work)
+
+        assert result["abstract"] == ""
+        assert result["doi"] == "10.1234/test"
