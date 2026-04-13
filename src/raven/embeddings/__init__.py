@@ -9,9 +9,14 @@ Rules (from AGENTS.md):
 - Ensure compatibility with SQLite vector schema
 """
 
+import shutil
+from pathlib import Path
 from typing import Optional
 
 from sentence_transformers import SentenceTransformer
+
+# Import from raven.config
+from raven.config import _get_data_dir
 
 # Embedding model configuration
 EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
@@ -21,16 +26,68 @@ EMBEDDING_DIMENSIONS = 384
 _model: Optional[SentenceTransformer] = None
 
 
+def _get_model_cache_dir() -> Path:
+    """Get the model cache directory path.
+
+    Returns:
+        Path to the model cache directory (raven/data_dir/model_cache).
+    """
+    return _get_data_dir() / "model_cache"
+
+
 def _get_model() -> SentenceTransformer:
     """Load and cache the sentence-transformers model.
+
+    First checks for a local cached model, otherwise downloads from HuggingFace
+    and saves to local cache for subsequent use.
 
     Returns:
         Cached SentenceTransformer model instance.
     """
     global _model
     if _model is None:
-        _model = SentenceTransformer(EMBEDDING_MODEL)
+        cache_dir = _get_model_cache_dir()
+
+        # Check if local cached model exists
+        if cache_dir.exists() and any(cache_dir.iterdir()):
+            # Load from local cache (avoids HTTP requests to HuggingFace)
+            _model = SentenceTransformer(str(cache_dir))
+        else:
+            # Load from HuggingFace and save to local cache
+            # Create cache directory if it doesn't exist
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            _model = SentenceTransformer(EMBEDDING_MODEL)
+            _model.save_pretrained(str(cache_dir))
+
     return _model
+
+
+def get_model_cache_size() -> Optional[int]:
+    """Get the size of the cached model in bytes.
+
+    Returns:
+        Size of the cached model in bytes, or None if cache doesn't exist.
+    """
+    cache_dir = _get_model_cache_dir()
+    if not cache_dir.exists():
+        return None
+
+    total_size = 0
+    for item in cache_dir.rglob("*"):
+        if item.is_file():
+            total_size += item.stat().st_size
+
+    return total_size
+
+
+def clean_model_cache() -> None:
+    """Delete the model cache directory."""
+    cache_dir = _get_model_cache_dir()
+    if cache_dir.exists():
+        shutil.rmtree(cache_dir)
+    # Reset in-memory model so next call re-downloads to cache
+    global _model
+    _model = None
 
 
 def generate_embedding(text: str) -> list[float]:

@@ -8,6 +8,7 @@ from typing import Optional
 import click
 
 from raven.config import _get_data_dir, _load_config
+from raven.embeddings import clean_model_cache, get_model_cache_size
 
 # Configure logging to show INFO level messages in CLI
 logging.basicConfig(
@@ -271,6 +272,44 @@ def init(ctx: click.Context, db: Optional[Path], env: Optional[Path]) -> None:
 
     init_database(db_path)
     click.echo(f"Database initialized at: {db_path}")
+
+
+def _format_size(size_bytes: float) -> str:
+    """Format bytes into human-readable size string."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
+
+
+@cli.group()
+def cache() -> None:
+    """Manage the model cache."""
+    pass
+
+
+@cache.command()
+def status() -> None:
+    """Show cache status and size."""
+    from raven.embeddings import _get_model_cache_dir
+
+    cache_dir = _get_model_cache_dir()
+    cache_size = get_model_cache_size()
+
+    click.echo(f"Cache directory: {cache_dir}")
+
+    if cache_size is None:
+        click.echo("Cache size: No cache found")
+    else:
+        click.echo(f"Cache size: {_format_size(cache_size)}")
+
+
+@cache.command()
+def clean() -> None:
+    """Delete the model cache."""
+    clean_model_cache()
+    click.echo("Cache cleaned successfully")
 
 
 @cli.command()

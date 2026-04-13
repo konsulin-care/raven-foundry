@@ -287,6 +287,48 @@ class TestCLICommands:
             # The abstract should be reconstructed from inverted index
             assert "This is abstract text" in result.output
 
+    def test_cache_status_command(self, tmp_path, monkeypatch):
+        """Test 'raven cache status' shows cache info."""
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        runner = CliRunner()
+
+        with patch("raven.main.get_model_cache_size") as mock_size:
+            mock_size.return_value = 440401920  # ~420 MB
+
+            result = runner.invoke(raven.main.cli, ["cache", "status"])
+
+            assert result.exit_code == 0
+            assert "Cache directory:" in result.output
+            assert "Cache size:" in result.output
+
+    def test_cache_status_command_no_cache(self, tmp_path, monkeypatch):
+        """Test 'raven cache status' when no cache exists."""
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        runner = CliRunner()
+
+        with patch("raven.main.get_model_cache_size") as mock_size:
+            mock_size.return_value = None
+
+            result = runner.invoke(raven.main.cli, ["cache", "status"])
+
+            assert result.exit_code == 0
+            assert "No cache found" in result.output
+
+    def test_cache_clean_command(self, tmp_path, monkeypatch):
+        """Test 'raven cache clean' deletes cache."""
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        runner = CliRunner()
+
+        with patch("raven.main.clean_model_cache") as mock_clean:
+            result = runner.invoke(raven.main.cli, ["cache", "clean"])
+
+            assert result.exit_code == 0
+            assert "Cache cleaned successfully" in result.output
+            mock_clean.assert_called_once()
+
     def test_init_command(self, tmp_path):
         """Test 'raven init' creates database."""
         runner = CliRunner()
