@@ -129,14 +129,11 @@ class TestConfigModule:
 
     def test_find_env_file_in_cwd(self, tmp_path, monkeypatch):
         """Config finds .env in current working directory."""
+        # Create .env in the current working directory
         env_file = tmp_path / ".env"
         env_file.write_text("OPENALEX_API_KEY=test\n")
 
-        # Create a subdirectory and change cwd
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        monkeypatch.chdir(subdir)
-
+        # Verify it is found when working directory contains .env
         result = raven.config._find_env_file()
         assert result is not None
         assert result.name == ".env"

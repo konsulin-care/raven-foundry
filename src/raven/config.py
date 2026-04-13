@@ -13,6 +13,12 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 _config: dict[str, str] = {}
 
 
+def _reset_config() -> None:
+    """Reset the config cache. Used for testing."""
+    global _config
+    _config = {}
+
+
 def _get_data_dir() -> Path:
     """Get data directory, cross-platform compatible.
 
@@ -103,7 +109,7 @@ def _load_config(env_path: Optional[Path] = None) -> dict[str, str]:
 
     Args:
         env_path: Explicit path to .env file. If provided and exists, use it.
-                If None, uses default logic (cwd/.env → data_dir/.env).
+                If None, uses default logic (cwd/.env -> data_dir/.env).
 
     Note:
         Loaded values are propagated to os.environ to ensure consistency
@@ -135,11 +141,12 @@ def get_groq_api_key() -> str:
         The API key string.
 
     Raises:
-        ValueError: If GROQ_API_KEY is not set in .env file.
+        ValueError: If GROQ_API_KEY is not set in .env file or environment.
     """
     config = _load_config()
 
-    api_key = config.get("GROQ_API_KEY", "")
+    # First check config, then fall back to environment variable
+    api_key = config.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY", "")
     if not api_key:
         raise ValueError(
             "GROQ_API_KEY is not set. Please add it to your .env file.\n"
@@ -157,7 +164,10 @@ def get_groq_model() -> str:
     """
     config = _load_config()
 
-    return config.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
+    # First check config, then fall back to environment variable
+    return (
+        config.get("GROQ_MODEL") or os.environ.get("GROQ_MODEL") or DEFAULT_GROQ_MODEL
+    )
 
 
 def get_openalex_api_key() -> str:
@@ -167,11 +177,12 @@ def get_openalex_api_key() -> str:
         The API key string.
 
     Raises:
-        ValueError: If OPENALEX_API_KEY is not set in .env file.
+        ValueError: If OPENALEX_API_KEY is not set in .env file or environment.
     """
     config = _load_config()
 
-    api_key = config.get("OPENALEX_API_KEY", "")
+    # First check config, then fall back to environment variable
+    api_key = config.get("OPENALEX_API_KEY") or os.environ.get("OPENALEX_API_KEY", "")
     if not api_key:
         raise ValueError(
             "OPENALEX_API_KEY is not set. Please add it to your .env file.\n"
@@ -189,4 +200,9 @@ def get_openalex_api_url() -> str:
     """
     config = _load_config()
 
-    return config.get("OPENALEX_API_URL", DEFAULT_OPENALEX_API_URL)
+    # First check config, then fall back to environment variable
+    return (
+        config.get("OPENALEX_API_URL")
+        or os.environ.get("OPENALEX_API_URL")
+        or DEFAULT_OPENALEX_API_URL
+    )
