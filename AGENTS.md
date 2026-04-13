@@ -13,13 +13,12 @@ Rules:
 - Prefer local computation over external APIs
 - Do not use LLMs for deterministic tasks (parsing, cleaning, embeddings)
 - Maintain compatibility with pip-installable CLI entrypoint
-- Implement unit tests for each new functionality, unless the user explicitly requests otherwise
-- Tests should pass in pre-commit hooks (.pre-commit-config.yaml), unless explicitly requested to skip
-- Tests should pass in GitHub workflow (.github/workflows/safeguard.yml), unless explicitly requested to skip
+- Implement unit tests for each new functionality, unless the unit tests would introduce redundancy to the current test suites
+- Tests should pass in pre-commit hooks (.pre-commit-config.yaml)
 
 Testing Requirements:
-- Every function with a return value should have a corresponding unit test, unless impractical
-- Test files should follow pytest convention: test_*.py, unless explicitly requested otherwise
+- Every function with a return value should have a corresponding unit test, unless it has been indirectly tested
+- Test files should follow pytest convention: test_*.py
 - Test functions should follow convention: test_*, unless explicitly requested otherwise
 - Use pytest-mock for external dependencies (APIs, file I/O)
 - Run tests in pre-commit: pip install pre-commit && pre-commit install
@@ -55,7 +54,7 @@ Anti-Pattern Rules (detected via Context7):
 
 3. **Embedding Dimensionality Mismatch**: Embedding dimension must match the model (384 for multilingual-e5-small), unless explicitly requested. Do not hardcode mismatched dimensions in schema.
 
-4. **Case-Sensitive DOI Matching**: Use `COLLATE NOCASE` for DOI columns and `LOWER()` in queries to ensure case-insensitive matching. DOIs (Digital Object Identifiers) are case-insensitive.
+4. **Case-Sensitive DOI (Digital Object Identifier) Matching**: Use `COLLATE NOCASE` for DOI columns and `LOWER()` in queries to ensure case-insensitive matching. DOIs (Digital Object Identifiers) are case-insensitive.
 
 5. **Local Imports in Tests**: Move all imports to module level. Local imports inside functions are harder to mock and hurt test readability.
    ```python
