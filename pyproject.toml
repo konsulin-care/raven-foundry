@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Raven Team", email = "team@ravenfoundry.dev"}
+    {name = "Konsulin Care", email = "hello@konsulin.care"}
 ]
 keywords = ["research", "academic", "knowledge", "curation", "cli"]
 classifiers = [
@@ -35,8 +35,37 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
+    "pytest-mock",
+    "requests-mock",
     "black",
     "ruff",
+    "mypy",
+    "types-requests",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --strict-markers"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+strict_optional = true
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "**/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
 ]
 
 [project.scripts]
