@@ -14,6 +14,7 @@ Rules (from AGENTS.md):
 - Route long-running tasks through scheduler when needed
 """
 
+import hashlib
 import logging
 
 import groq
@@ -46,13 +47,19 @@ _MAX_CACHE_SIZE = 1000
 _response_cache: dict[str, str] = {}
 
 
+def _make_cache_key(prompt: str, system_prompt: str | None = None) -> str:
+    """Create a stable cache key using SHA256 hash to prevent collisions."""
+    content = f"{prompt}:{system_prompt or ''}"
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 def query_llm(prompt: str, system_prompt: str | None = None) -> str:
     """Query the LLM with a prompt."""
     # Validate API key - raises ValueError if falsy
     get_groq_api_key()
 
-    # Check cache first (using hash for fast key lookup)
-    cache_key = f"{hash(prompt)}:{hash(system_prompt or '')}"
+    # Check cache first (using SHA256 for collision-free key)
+    cache_key = _make_cache_key(prompt, system_prompt)
     if cache_key in _response_cache:
         return _response_cache[cache_key]
 

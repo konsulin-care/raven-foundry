@@ -22,12 +22,29 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from raven.config import get_openalex_api_key, get_openalex_api_url
 from raven.storage import add_paper
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+def _create_session_with_retries() -> requests.Session:
+    """Create a requests session with retry logic and backoff."""
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
 
 
 def _get_openalex_base_url() -> str:
@@ -56,8 +73,11 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
 
     # Query OpenAlex API (requires doi: prefix)
     url = f"{base_url}/works/doi:{doi}?api_key={api_key}"
+
+    # Use session with retry logic
+    session = _create_session_with_retries()
     try:
-        response = requests.get(url, timeout=30)
+        response = session.get(url, timeout=30)
     except requests.exceptions.RequestException as e:
         logger.error("Network error fetching paper: %s", e)
         return None
