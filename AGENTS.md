@@ -19,7 +19,7 @@ Rules:
 Testing Requirements:
 - Every function with a return value should have a corresponding unit test, unless it has been indirectly tested
 - Test files should follow pytest convention: test_*.py
-- Test functions should follow convention: test_*, unless explicitly requested otherwise
+- Test functions should follow convention: test_*
 - Use pytest-mock for external dependencies (APIs, file I/O)
 - Run tests in pre-commit: pip install pre-commit && pre-commit install
 - CI runs tests on every PR to master and every commit in open PRs
@@ -32,7 +32,7 @@ Module-specific rules are defined in `src/raven/*/AGENTS.md` files:
 
 Anti-Pattern Rules (detected via Context7):
 
-1. **Mutable Default Arguments**: Never use mutable objects (list, dict) as default arguments, unless explicitly requested. Use `None` and initialize inside the function.
+1. **Mutable Default Arguments**: Never use mutable objects (list, dict) as default arguments, unless required by the in-function process. Use `None` and initialize inside the function.
    ```python
    # WRONG (Without Reason)
    def foo(mydict={}): ...
@@ -41,7 +41,7 @@ Anti-Pattern Rules (detected via Context7):
        if mydict is None: mydict = {}
    ```
 
-2. **SQLite Connection Leaks**: Always use context managers (`with` statement) for sqlite3 connections to ensure proper closure, unless explicitly requested.
+2. **SQLite Connection Leaks**: Always use context managers (`with` statement) for sqlite3 connections to ensure proper closure.
    ```python
    # WRONG (Without Reason)
    conn = sqlite3.connect(db)
@@ -52,7 +52,7 @@ Anti-Pattern Rules (detected via Context7):
        # ... use conn ...
    ```
 
-3. **Embedding Dimensionality Mismatch**: Embedding dimension must match the model (384 for multilingual-e5-small), unless explicitly requested. Do not hardcode mismatched dimensions in schema.
+3. **Embedding Dimensionality Mismatch**: Embedding dimension must match the model (384 for multilingual-e5-small). Do not hardcode mismatched dimensions in schema.
 
 4. **Case-Sensitive DOI (Digital Object Identifier) Matching**: Use `COLLATE NOCASE` for DOI columns and `LOWER()` in queries to ensure case-insensitive matching. DOIs (Digital Object Identifiers) are case-insensitive.
 
