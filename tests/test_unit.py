@@ -246,6 +246,47 @@ class TestCLICommands:
 
             assert result.exit_code == 0
 
+    def test_search_command_displays_abstract(self, tmp_path, monkeypatch):
+        """Test 'raven search' displays abstract for OpenAlex results."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        runner = CliRunner()
+
+        # Mock the OpenAlex API response with abstract
+        with patch("raven.ingestion.search_works") as mock_search:
+            mock_search.return_value = {
+                "results": [
+                    {
+                        "doi": "10.1234/test",
+                        "title": "Test Paper With Abstract",
+                        "type": "article",
+                        "publication_year": 2023,
+                        "cited_by_count": 10,
+                        "open_access": {"is_oa": True},
+                        "relevance_score": 0.9,
+                        "abstract_inverted_index": {
+                            "This": [0],
+                            "is": [1],
+                            "abstract": [2],
+                            "text": [3],
+                        },
+                    }
+                ],
+                "meta": {"count": 1},
+                "search_type": "semantic",
+            }
+
+            result = runner.invoke(
+                raven.main.cli,
+                ["search", "test query"],
+            )
+
+            assert result.exit_code == 0
+            assert "Abstract:" in result.output
+            # The abstract should be reconstructed from inverted index
+            assert "This is abstract text" in result.output
+
     def test_init_command(self, tmp_path):
         """Test 'raven init' creates database."""
         runner = CliRunner()

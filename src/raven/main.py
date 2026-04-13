@@ -194,6 +194,11 @@ def search(
             )
             if formatted.get("relevance_score"):
                 click.echo(f"   Relevance: {formatted['relevance_score']:.3f}")
+            if formatted.get("abstract"):
+                abstract_preview = formatted["abstract"][:300]
+                if len(formatted["abstract"]) > 300:
+                    abstract_preview += "..."
+                click.echo(f"   Abstract: {abstract_preview}")
             click.echo("---")
 
         # Prompt for ingestion if results found
