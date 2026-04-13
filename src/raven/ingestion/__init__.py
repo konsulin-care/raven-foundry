@@ -18,6 +18,7 @@ Rules:
 """
 
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,11 @@ from urllib3.util.retry import Retry
 
 from raven.config import get_openalex_api_key, get_openalex_api_url
 from raven.storage import add_paper
+
+# Default filters for search results
+# Note: Semantic search has limited filter support (no has_doi), so we use separate filters
+DEFAULT_FILTERS = "is_oa:true,has_doi:true"  # For keyword search
+SEMANTIC_FILTERS = "is_oa:true"  # For semantic search (limited to: is_oa, has_abstract, has_fulltext, etc.)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -103,4 +109,249 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
         "doi": doi,
         "title": title,
         "type": paper_type,
+    }
+
+
+# Rate limiting for semantic search (1 request per second)
+_semantic_last_request_time: float = 0.0
+
+
+def _rate_limit_semantic() -> None:
+    """Apply rate limiting for semantic search."""
+    global _semantic_last_request_time
+    elapsed = time.time() - _semantic_last_request_time
+    if elapsed < 1.0:
+        time.sleep(1.0 - elapsed)
+    _semantic_last_request_time = time.time()
+
+
+def _parse_search_query(query: str) -> str:
+    """Parse user query to OpenAlex search syntax.
+
+    Handles:
+    - Boolean operators (AND, OR, NOT) - passed through
+    - Quoted phrases - kept as exact match
+    - Wildcards (*, ?) - passed through
+    - Fuzzy search (~N) - passed through
+    """
+    # Normalize whitespace
+    query = " ".join(query.split())
+    return query
+
+
+def search_works(
+    query: str,
+    filter: str | None = None,
+    page: int = 1,
+    per_page: int = 50,
+    sort: str = "relevance_score:desc",
+    use_semantic: bool = True,
+) -> dict[str, Any]:
+    """Search works via OpenAlex API.
+
+    Tries semantic search first, falls back to keyword search on rate limit.
+
+    Args:
+        query: Search query string
+        filter: Additional OpenAlex filters (e.g., "publication_year:>2020")
+        page: Page number (1-indexed)
+        per_page: Results per page (max 100)
+        sort: Sort order (default: relevance_score:desc)
+        use_semantic: If True, try semantic first, then fallback to keyword
+
+    Returns:
+        Dict with 'results', 'meta' (pagination info), 'search_type' indicator
+    """
+    api_key = get_openalex_api_key()
+    base_url = _get_openalex_base_url()
+
+    session = _create_session_with_retries()
+
+    # Try semantic search first if enabled
+    if use_semantic:
+        try:
+            _rate_limit_semantic()
+
+            # Build filters for semantic search (limited supported filters)
+            semantic_filters = [SEMANTIC_FILTERS]
+            if filter:
+                semantic_filters.append(filter)
+            combined_semantic_filter = ",".join(semantic_filters)
+
+            url = f"{base_url}/works"
+            params: dict[str, Any] = {
+                "search.semantic": query,
+                "filter": combined_semantic_filter,
+                "sort": sort,
+                "per_page": min(per_page, 50),  # Semantic max 50
+                "page": page,
+                "api_key": api_key,
+            }
+
+            response = session.get(url, params=params, timeout=30)
+
+            if response.status_code == 200:
+                data: dict[str, Any] = response.json()
+                data["search_type"] = "semantic"
+                return data
+            elif response.status_code == 429:
+                logger.info("Semantic search rate limited, falling back to keyword")
+            else:
+                logger.warning(
+                    "Semantic search failed: status %s, falling back to keyword",
+                    response.status_code,
+                )
+        except requests.exceptions.RequestException as e:
+            logger.warning("Semantic search error: %s, falling back to keyword", e)
+
+    # Fallback to keyword search (use full filters)
+    filters = [DEFAULT_FILTERS]
+    if filter:
+        filters.append(filter)
+    combined_filter = ",".join(filters)
+
+    search_type = "keyword"
+    url = f"{base_url}/works"
+    # Note: params shadows the semantic branch's params but they're in different branches
+    keyword_params: dict[str, Any] = {
+        "search": _parse_search_query(query),
+        "filter": combined_filter,
+        "sort": sort,
+        "per_page": min(per_page, 100),  # Keyword max 100
+        "page": page,
+        "api_key": api_key,
+    }
+
+    try:
+        response = session.get(url, params=keyword_params, timeout=30)
+
+        if response.status_code != 200:
+            logger.error("OpenAlex search error: status %s", response.status_code)
+            return {"results": [], "meta": {"count": 0}, "search_type": search_type}
+
+        # Note: data shadows the semantic branch's data but they're in different branches
+        keyword_data: dict[str, Any] = response.json()
+        keyword_data["search_type"] = search_type
+        return keyword_data
+
+    except requests.exceptions.RequestException as e:
+        logger.error("Network error during search: %s", e)
+        return {"results": [], "meta": {"count": 0}, "search_type": search_type}
+
+
+def search_works_keyword(
+    query: str,
+    filter: str | None = None,
+    page: int = 1,
+    per_page: int = 50,
+    sort: str = "relevance_score:desc",
+) -> dict[str, Any]:
+    """Keyword-only search (explicit).
+
+    Args:
+        query: Search query string
+        filter: Additional OpenAlex filters
+        page: Page number
+        per_page: Results per page (max 100)
+        sort: Sort order
+
+    Returns:
+        Dict with 'results', 'meta', 'search_type'='keyword'
+    """
+    api_key = get_openalex_api_key()
+    base_url = _get_openalex_base_url()
+
+    filters = [DEFAULT_FILTERS]
+    if filter:
+        filters.append(filter)
+    combined_filter = ",".join(filters)
+
+    session = _create_session_with_retries()
+    url = f"{base_url}/works"
+    params: dict[str, Any] = {
+        "search": _parse_search_query(query),
+        "filter": combined_filter,
+        "sort": sort,
+        "per_page": min(per_page, 100),
+        "page": page,
+        "api_key": api_key,
+    }
+
+    try:
+        response = session.get(url, params=params, timeout=30)
+
+        if response.status_code != 200:
+            logger.error(
+                "OpenAlex keyword search error: status %s", response.status_code
+            )
+            return {"results": [], "meta": {"count": 0}, "search_type": "keyword"}
+
+        data: dict[str, Any] = response.json()
+        data["search_type"] = "keyword"
+        return data
+
+    except requests.exceptions.RequestException as e:
+        logger.error("Network error during keyword search: %s", e)
+        return {"results": [], "meta": {"count": 0}, "search_type": "keyword"}
+
+
+def search_works_semantic(
+    query: str,
+    per_page: int = 50,
+) -> dict[str, Any]:
+    """Semantic-only search (explicit).
+
+    Note: Limited to 1 request per second, max 50 results.
+
+    Args:
+        query: Semantic search query
+        per_page: Results per page (max 50)
+
+    Returns:
+        Dict with 'results', 'meta', 'search_type'='semantic'
+    """
+    _rate_limit_semantic()
+
+    api_key = get_openalex_api_key()
+    base_url = _get_openalex_base_url()
+
+    session = _create_session_with_retries()
+    url = f"{base_url}/works"
+    params: dict[str, Any] = {
+        "search.semantic": query,
+        "filter": SEMANTIC_FILTERS,
+        "sort": "relevance_score:desc",
+        "per_page": min(per_page, 50),
+        "api_key": api_key,
+    }
+
+    try:
+        response = session.get(url, params=params, timeout=30)
+
+        if response.status_code != 200:
+            logger.error(
+                "OpenAlex semantic search error: status %s", response.status_code
+            )
+            return {"results": [], "meta": {"count": 0}, "search_type": "semantic"}
+
+        data: dict[str, Any] = response.json()
+        data["search_type"] = "semantic"
+        return data
+
+    except requests.exceptions.RequestException as e:
+        logger.error("Network error during semantic search: %s", e)
+        return {"results": [], "meta": {"count": 0}, "search_type": "semantic"}
+
+
+def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
+    """Format OpenAlex work result for display/storage."""
+    return {
+        "doi": work.get("doi"),
+        "title": work.get("title", "Untitled"),
+        "type": work.get("type", "article"),
+        "publication_year": work.get("publication_year"),
+        "cited_by_count": work.get("cited_by_count", 0),
+        "open_access": work.get("open_access", {}).get("is_oa", False),
+        "id": work.get("id"),
+        "relevance_score": work.get("relevance_score"),
     }

@@ -1,4 +1,4 @@
-<!-- Context: project-intelligence/technical | Priority: critical | Version: 1.0 | Updated: 2026-04-13 -->
+<!-- Context: project-intelligence/technical | Priority: critical | Version: 1.1 | Updated: 2026-04-13 -->
 
 # Technical Domain
 
@@ -77,6 +77,24 @@ def _create_session_with_retries() -> requests.Session:
 - All functions with return values require unit tests
 - No LLM for deterministic tasks (parsing, embeddings)
 - Cache LLM responses with SHA256 keys
+
+## OpenAlex Search
+### Sort Parameter (OpenAlex Format Directly)
+```python
+# Sort passed directly to OpenAlex - no conversion
+sort = "relevance_score:desc"  # single field
+sort = "publication_year:desc,relevance_score:desc"  # multi-field
+```
+### Filters (Semantic vs Keyword)
+```python
+SEMANTIC_FILTERS = "is_oa:true"  # limited filters for semantic
+DEFAULT_FILTERS = "is_oa:true,has_doi:true"  # full filters for keyword
+# Note: has_doi NOT supported in semantic search (returns 400)
+```
+### Rate Limiting
+```python
+SEMANTIC_RATE_LIMIT = 1  # requests/sec for semantic search
+```
 
 ## Security Requirements
 - API keys in environment variables, never in code
