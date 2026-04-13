@@ -31,7 +31,9 @@ from raven.embeddings import generate_embedding, generate_embeddings_batch
 from raven.storage import (
     add_embedding,
     add_paper,
+    get_embedding_exists,
     get_paper_id_by_doi,
+    update_paper,
 )
 
 # Default filters for search results
@@ -145,18 +147,55 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
         or None
     )
 
-    # Add paper metadata to database
-    paper_id = add_paper(
-        db_path,
-        doi=doi,
-        title=title,
-        authors=authors,
-        abstract=abstract,
-        publication_year=data.get("publication_year"),
-        venue=data.get("host_venue", {}).get("display_name"),
-        openalex_id=data.get("id"),
-        paper_type=paper_type,
-    )
+    # Idempotent ingestion: Check if DOI exists first
+    existing_id = get_paper_id_by_doi(db_path, doi)
+
+    if existing_id is not None:
+        # DOI exists - check if embedding exists
+        if get_embedding_exists(db_path, existing_id):
+            # DOI and embedding both exist - skip with info log
+            logger.warning(
+                "Paper with DOI %s already fully stored (paper + embedding)", doi
+            )
+            return {
+                "paper_id": existing_id,
+                "doi": doi,
+                "title": title,
+                "type": paper_type,
+                "embedding": None,  # Not regenerated
+            }
+        else:
+            # DOI exists but no embedding - update metadata and regenerate embedding
+            logger.warning(
+                "Paper with DOI %s exists without embedding, updating and generating embedding",
+                doi,
+            )
+            update_paper(
+                db_path,
+                paper_id=existing_id,
+                title=title,
+                authors=authors,
+                abstract=abstract,
+                publication_year=data.get("publication_year"),
+                venue=data.get("host_venue", {}).get("display_name"),
+                openalex_id=data.get("id"),
+                paper_type=paper_type,
+            )
+            paper_id = existing_id
+    else:
+        # New DOI - add paper
+        logger.info("Adding new paper with DOI %s", doi)
+        paper_id = add_paper(
+            db_path,
+            doi=doi,
+            title=title,
+            authors=authors,
+            abstract=abstract,
+            publication_year=data.get("publication_year"),
+            venue=data.get("host_venue", {}).get("display_name"),
+            openalex_id=data.get("id"),
+            paper_type=paper_type,
+        )
 
     # Generate embedding from title + abstract (optional - may fail if vec extension unavailable)
     embedding = None
@@ -534,55 +573,62 @@ def ingest_search_results(
     # Store papers and embeddings
     ingested = []
     for i, (paper_info, _) in enumerate(papers_data):
-        try:
-            # Add paper to database
-            paper_id = add_paper(db_path, **paper_info)
+        doi = paper_info.get("doi")
 
-            # Add embedding if available
-            embedding = embeddings[i] if embeddings is not None else None
-            if embedding is not None:
-                try:
-                    add_embedding(db_path, paper_id, embedding)
-                except Exception as e:
-                    logger.warning("Failed to store embedding: %s", e)
+        if doi:
+            # Check if DOI exists first (idempotent pattern)
+            existing_id = get_paper_id_by_doi(db_path, doi)
 
-            ingested.append(
-                {
-                    "paper_id": paper_id,
-                    "doi": paper_info["doi"],
-                    "title": paper_info["title"],
-                    "type": paper_info["paper_type"],
-                    "embedding": embedding,
-                }
-            )
-        except ValueError as e:
-            # Paper already exists (DOI duplicate) - try to update embedding
-            doi = paper_info.get("doi")
-            if doi:
-                existing_id = get_paper_id_by_doi(db_path, doi)
-                if existing_id:
-                    # Try to add/update embedding for existing paper
-                    embedding = embeddings[i] if embeddings is not None else None
-                    if embedding is not None:
-                        try:
-                            add_embedding(db_path, existing_id, embedding)
-                            logger.info("Updated embedding for existing paper: %s", doi)
-                        except Exception as emb_err:
-                            logger.warning("Failed to update embedding: %s", emb_err)
-                    # Still return the existing paper info
+            if existing_id is not None:
+                # DOI exists - check if embedding exists
+                if get_embedding_exists(db_path, existing_id):
+                    # DOI and embedding both exist - skip with info log
+                    logger.info(
+                        "Paper with DOI %s already fully stored (paper + embedding)",
+                        doi,
+                    )
                     ingested.append(
                         {
                             "paper_id": existing_id,
                             "doi": doi,
                             "title": paper_info["title"],
                             "type": paper_info["paper_type"],
-                            "embedding": embedding,
+                            "embedding": None,
                         }
                     )
                     continue
-            # If we couldn't find/update, log and skip
-            logger.info("Skipping duplicate paper: %s", e)
-        except Exception as e:
-            logger.error("Error ingesting paper %s: %s", paper_info.get("doi"), e)
+                else:
+                    # DOI exists but no embedding - update metadata and regenerate
+                    logger.info(
+                        "Paper with DOI %s exists without embedding, updating and generating embedding",
+                        doi,
+                    )
+                    update_paper(db_path, existing_id, **paper_info)
+                    paper_id = existing_id
+            else:
+                # New DOI - add paper
+                logger.info("Adding new paper with DOI %s", doi)
+                paper_id = add_paper(db_path, **paper_info)
+        else:
+            # No DOI - add paper (will be deduplicated by other means if needed)
+            paper_id = add_paper(db_path, **paper_info)
+
+        # Add embedding if available
+        embedding = embeddings[i] if embeddings is not None else None
+        if embedding is not None:
+            try:
+                add_embedding(db_path, paper_id, embedding)
+            except Exception as e:
+                logger.warning("Failed to store embedding: %s", e)
+
+        ingested.append(
+            {
+                "paper_id": paper_id,
+                "doi": paper_info["doi"],
+                "title": paper_info["title"],
+                "type": paper_info["paper_type"],
+                "embedding": embedding,
+            }
+        )
 
     return ingested

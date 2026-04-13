@@ -1,11 +1,20 @@
 """CLI entry point for Raven - offline-first research system."""
 
+import logging
+import sys
 from pathlib import Path
 from typing import Optional
 
 import click
 
 from raven.config import _get_data_dir, _load_config
+
+# Configure logging to show INFO level messages in CLI
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    stream=sys.stderr,
+)
 
 
 def _get_version() -> str:

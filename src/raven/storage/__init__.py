@@ -1,10 +1,12 @@
 """Storage module - SQLite + vector storage for Raven."""
 
-import importlib.resources
+import logging
 import sqlite3
 import struct
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _load_vector_extension(conn: sqlite3.Connection) -> None:
@@ -12,11 +14,18 @@ def _load_vector_extension(conn: sqlite3.Connection) -> None:
 
     Args:
         conn: SQLite connection to load the extension into.
+
+    Raises:
+        RuntimeError: If the vector extension cannot be loaded.
     """
+    import importlib.resources
+
     ext_path = importlib.resources.files("sqlite_vector.binaries") / "vector"
     conn.enable_load_extension(True)
     try:
         conn.load_extension(str(ext_path))
+    except Exception as e:
+        raise RuntimeError(f"Failed to load sqlite-vector extension: {e}") from e
     finally:
         conn.enable_load_extension(False)
 
@@ -84,17 +93,22 @@ def init_database(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(publication_year)
         """)
 
-        # Create vector embeddings table using sqlite-vector (optional - may fail if extension not available)
+        # Create vector embeddings table using sqlite-vector (sqliteai-vector package)
+        # Uses regular table with BLOB column + vector_init()
         try:
             conn.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
+                CREATE TABLE IF NOT EXISTS embeddings (
                     paper_id INTEGER PRIMARY KEY,
-                    embedding float[384]
+                    embedding BLOB
                 )
             """)
-        except sqlite3.OperationalError:
-            # Extension not available - vector search will not work
-            pass
+            conn.execute("""
+                SELECT vector_init('embeddings', 'embedding',
+                                   'type=FLOAT32,dimension=384,distance=COSINE')
+            """)
+        except sqlite3.OperationalError as e:
+            # Extension not available - log error and continue
+            logger.warning("Failed to create embeddings table: %s", e)
 
         conn.commit()
 
@@ -147,6 +161,24 @@ def get_paper_id_by_doi(db_path: Path, doi: str | None) -> int | None:
         )
         row = cursor.fetchone()
         return row[0] if row else None  # type: ignore[return-value]
+
+
+def get_embedding_exists(db_path: Path, paper_id: int) -> bool:
+    """Check if embedding exists for a paper.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        paper_id: ID of the paper to check.
+
+    Returns:
+        True if embedding exists, False otherwise.
+    """
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute(
+            "SELECT 1 FROM embeddings WHERE paper_id = ?",
+            (paper_id,),
+        )
+        return cursor.fetchone() is not None
 
 
 def add_paper(
@@ -208,6 +240,57 @@ def add_paper(
             raise
 
 
+def update_paper(
+    db_path: Path,
+    paper_id: int,
+    title: str,
+    authors: str | None = None,
+    abstract: str | None = None,
+    publication_year: int | None = None,
+    venue: str | None = None,
+    openalex_id: str | None = None,
+    paper_type: str = "article",
+) -> None:
+    """Update an existing paper's metadata.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        paper_id: ID of the paper to update.
+        title: Title of the paper.
+        authors: Comma-separated list of authors (optional).
+        abstract: Paper abstract (optional).
+        publication_year: Year of publication (optional).
+        venue: Publication venue/journal (optional).
+        openalex_id: OpenAlex ID for the paper (optional).
+        paper_type: Type of paper (default: 'article').
+    """
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE papers SET
+                title = ?,
+                authors = ?,
+                abstract = ?,
+                publication_year = ?,
+                venue = ?,
+                openalex_id = ?,
+                type = ?
+            WHERE id = ?
+            """,
+            (
+                title,
+                authors,
+                abstract,
+                publication_year,
+                venue,
+                openalex_id,
+                paper_type,
+                paper_id,
+            ),
+        )
+        conn.commit()
+
+
 def add_embedding(db_path: Path, paper_id: int, embedding: list[float]) -> None:
     """Add vector embedding for a paper.
 
@@ -229,11 +312,19 @@ def add_embedding(db_path: Path, paper_id: int, embedding: list[float]) -> None:
         # Load sqlite-vector extension
         _load_vector_extension(conn)
 
-        # Insert embedding into vector table
-        serialized = serialize_f32(embedding)
+        # Initialize vector column (required for each new connection)
         conn.execute(
-            "INSERT OR REPLACE INTO embeddings (paper_id, embedding) VALUES (?, ?)",
-            (paper_id, serialized),
+            "SELECT vector_init('embeddings', 'embedding', "
+            "'type=FLOAT32,dimension=384,distance=COSINE')"
+        )
+
+        # Insert embedding using vector_as_f32 for proper formatting
+        import json
+
+        embedding_json = json.dumps(embedding)
+        conn.execute(
+            "INSERT OR REPLACE INTO embeddings (paper_id, embedding) VALUES (?, vector_as_f32(?))",
+            (paper_id, embedding_json),
         )
         conn.commit()
 
@@ -264,8 +355,16 @@ def search_by_embedding(
         # Load sqlite-vector extension
         _load_vector_extension(conn)
 
-        # Serialize query and run KNN search
-        serialized = serialize_f32(query_embedding)
+        # Initialize vector column (required for each new connection)
+        conn.execute(
+            "SELECT vector_init('embeddings', 'embedding', "
+            "'type=FLOAT32,dimension=384,distance=COSINE')"
+        )
+
+        # Serialize query and run KNN search using vector_full_scan
+        import json
+
+        query_json = json.dumps(query_embedding)
         conn.row_factory = sqlite3.Row
 
         cursor = conn.execute(
@@ -279,14 +378,14 @@ def search_by_embedding(
                 p.publication_year,
                 p.venue,
                 p.type,
-                e.distance
+                v.distance
             FROM embeddings e
             JOIN papers p ON e.paper_id = p.id
-            WHERE e.embedding MATCH ?
-            ORDER BY e.distance
-            LIMIT ?
+            JOIN vector_full_scan('embeddings', 'embedding', vector_as_f32(?), ?) AS v
+            ON e.paper_id = v.rowid
+            ORDER BY v.distance
             """,
-            (serialized, top_k),
+            (query_json, top_k),
         )
 
         results = [dict(row) for row in cursor.fetchall()]

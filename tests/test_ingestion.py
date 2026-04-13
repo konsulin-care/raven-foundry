@@ -138,20 +138,28 @@ class TestIngestPaper:
 
     @patch("raven.ingestion.add_embedding")
     @patch("raven.ingestion.generate_embedding")
+    @patch("raven.ingestion.update_paper")
     @patch("raven.ingestion.add_paper")
+    @patch("raven.ingestion.get_embedding_exists")
+    @patch("raven.ingestion.get_paper_id_by_doi")
     @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion._create_session_with_retries")
     def test_ingest_paper_success(
         self,
         mock_session_cls,
         mock_api_key,
+        mock_get_paper_id_by_doi,
+        mock_get_embedding_exists,
         mock_add_paper,
+        mock_update_paper,
         mock_generate_embedding,
         mock_add_embedding,
     ):
         """ingest_paper fetches paper, stores metadata and embedding."""
         # Setup mocks
         mock_api_key.return_value = "test-key"
+        mock_get_paper_id_by_doi.return_value = None  # New DOI - doesn't exist
+        mock_get_embedding_exists.return_value = False
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
         mock_response = MagicMock()
@@ -181,15 +189,34 @@ class TestIngestPaper:
         assert result["type"] == "article"
         assert result["embedding"] == [0.1] * 384
 
+        mock_get_paper_id_by_doi.assert_called_once_with(db_path, "10.1234/test")
         mock_add_paper.assert_called_once()
         mock_generate_embedding.assert_called_once_with("Test Paper")
         mock_add_embedding.assert_called_once_with(db_path, 42, [0.1] * 384)
 
+    @patch("raven.ingestion.add_embedding")
+    @patch("raven.ingestion.generate_embedding")
+    @patch("raven.ingestion.update_paper")
+    @patch("raven.ingestion.add_paper")
+    @patch("raven.ingestion.get_embedding_exists")
+    @patch("raven.ingestion.get_paper_id_by_doi")
     @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion._create_session_with_retries")
-    def test_ingest_paper_api_error(self, mock_session_cls, mock_api_key):
+    def test_ingest_paper_api_error(
+        self,
+        mock_session_cls,
+        mock_api_key,
+        mock_get_paper_id_by_doi,
+        mock_get_embedding_exists,
+        mock_add_paper,
+        mock_update_paper,
+        mock_generate_embedding,
+        mock_add_embedding,
+    ):
         """ingest_paper returns None on API error."""
         mock_api_key.return_value = "test-key"
+        mock_get_paper_id_by_doi.return_value = None
+        mock_get_embedding_exists.return_value = False
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
         mock_response = MagicMock()
@@ -201,13 +228,31 @@ class TestIngestPaper:
 
         assert result is None
 
+    @patch("raven.ingestion.add_embedding")
+    @patch("raven.ingestion.generate_embedding")
+    @patch("raven.ingestion.update_paper")
+    @patch("raven.ingestion.add_paper")
+    @patch("raven.ingestion.get_embedding_exists")
+    @patch("raven.ingestion.get_paper_id_by_doi")
     @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion._create_session_with_retries")
-    def test_ingest_paper_network_error(self, mock_session_cls, mock_api_key):
+    def test_ingest_paper_network_error(
+        self,
+        mock_session_cls,
+        mock_api_key,
+        mock_get_paper_id_by_doi,
+        mock_get_embedding_exists,
+        mock_add_paper,
+        mock_update_paper,
+        mock_generate_embedding,
+        mock_add_embedding,
+    ):
         """ingest_paper returns None on network error."""
         import requests
 
         mock_api_key.return_value = "test-key"
+        mock_get_paper_id_by_doi.return_value = None
+        mock_get_embedding_exists.return_value = False
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
         mock_session.get.side_effect = requests.exceptions.RequestException(
@@ -225,11 +270,22 @@ class TestIngestSearchResults:
 
     @patch("raven.ingestion.add_embedding")
     @patch("raven.ingestion.generate_embeddings_batch")
+    @patch("raven.ingestion.update_paper")
     @patch("raven.ingestion.add_paper")
+    @patch("raven.ingestion.get_embedding_exists")
+    @patch("raven.ingestion.get_paper_id_by_doi")
     def test_ingest_search_results_success(
-        self, mock_add_paper, mock_generate_batch, mock_add_embedding
+        self,
+        mock_get_paper_id_by_doi,
+        mock_get_embedding_exists,
+        mock_add_paper,
+        mock_update_paper,
+        mock_generate_batch,
+        mock_add_embedding,
     ):
         """ingest_search_results batch processes papers."""
+        mock_get_paper_id_by_doi.return_value = None  # All new DOIs
+        mock_get_embedding_exists.return_value = False
         mock_add_paper.side_effect = [1, 2, 3]
         mock_generate_batch.return_value = [
             [0.1] * 384,
@@ -278,15 +334,25 @@ class TestIngestSearchResults:
         assert results[1]["paper_id"] == 2
         assert results[2]["paper_id"] == 3
 
+        assert mock_get_paper_id_by_doi.call_count == 3
         mock_add_paper.assert_called()
         mock_generate_batch.assert_called_once()
         assert mock_add_embedding.call_count == 3
 
     @patch("raven.ingestion.add_embedding")
     @patch("raven.ingestion.generate_embeddings_batch")
+    @patch("raven.ingestion.update_paper")
     @patch("raven.ingestion.add_paper")
+    @patch("raven.ingestion.get_embedding_exists")
+    @patch("raven.ingestion.get_paper_id_by_doi")
     def test_ingest_search_results_empty(
-        self, mock_add_paper, mock_generate_batch, mock_add_embedding
+        self,
+        mock_get_paper_id_by_doi,
+        mock_get_embedding_exists,
+        mock_add_paper,
+        mock_update_paper,
+        mock_generate_batch,
+        mock_add_embedding,
     ):
         """ingest_search_results handles empty results."""
         search_results = {"results": []}
@@ -295,22 +361,28 @@ class TestIngestSearchResults:
         results = ingest_search_results(db_path, search_results)
 
         assert results == []
+        mock_get_paper_id_by_doi.assert_not_called()
         mock_add_paper.assert_not_called()
         mock_generate_batch.assert_not_called()
 
     @patch("raven.ingestion.add_embedding")
     @patch("raven.ingestion.generate_embeddings_batch")
+    @patch("raven.ingestion.get_embedding_exists")
     @patch("raven.ingestion.get_paper_id_by_doi")
     @patch("raven.ingestion.add_paper")
     def test_ingest_search_results_skips_duplicates(
-        self, mock_add_paper, mock_get_paper_id, mock_generate_batch, mock_add_embedding
+        self,
+        mock_add_paper,
+        mock_get_paper_id,
+        mock_get_embedding_exists,
+        mock_generate_batch,
+        mock_add_embedding,
     ):
         """ingest_search_results handles duplicate DOIs (updates embedding if available)."""
-        # Simulate duplicate DOI: add_paper raises, but get_paper_id returns existing ID
-        mock_add_paper.side_effect = ValueError("Paper with DOI already exists")
+        # Existing paper with embedding exists - should skip
         mock_get_paper_id.return_value = 1  # Existing paper ID
+        mock_get_embedding_exists.return_value = True  # Embedding exists
         mock_generate_batch.return_value = [[0.1] * 384]
-        mock_add_embedding.return_value = None
 
         search_results = {
             "results": [
@@ -329,8 +401,8 @@ class TestIngestSearchResults:
         db_path = Path("/tmp/test.db")
         results = ingest_search_results(db_path, search_results)
 
-        # With embedding available, should update embedding and return paper info
+        # With embedding available, should skip (not add embedding again)
         assert len(results) == 1
         assert results[0]["doi"] == "10.1234/duplicate"
         assert results[0]["paper_id"] == 1
-        mock_add_embedding.assert_called_once()
+        mock_add_embedding.assert_not_called()  # Should skip since embedding exists
