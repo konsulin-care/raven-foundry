@@ -41,16 +41,31 @@ Anti-Pattern Rules (detected via Context7):
        if mydict is None: mydict = {}
    ```
 
-2. **SQLite Connection Leaks**: Always use context managers (`with` statement) for sqlite3 connections to ensure proper closure.
+2. **SQLite Connection Leaks**: The `with` statement for sqlite3 connections only manages transactions (commit/rollback) and does NOT close the Connection object. Always explicitly close connections to prevent leaks.
+
    ```python
-   # WRONG (Without Reason)
-   conn = sqlite3.connect(db)
-   # ... use conn ...
-   conn.close()
-   # CORRECT
+   # WRONG (Without Reason) - No explicit close
    with sqlite3.connect(db) as conn:
        # ... use conn ...
+   # Connection still open!
+
+   # CORRECT - Explicit close after with block
+   with sqlite3.connect(db) as conn:
+       # ... use conn ...
+   conn.close()  # See: sqlite3.connect, conn.close()
+
+   # CORRECT - Using contextlib.closing for guaranteed closure
+   import contextlib
+   with contextlib.closing(sqlite3.connect(db)) as conn:  # See: contextlib.closing()
+       # ... use conn ...
+   # Connection automatically closed when block exits
    ```
+
+   Key references:
+   - `sqlite3.connect()` - Creates a Connection object
+   - `with` statement - Only handles commit/rollback (see: "with" statement)
+   - `conn.close()` - Explicitly closes the Connection
+   - `contextlib.closing()` - Context manager that guarantees closure
 
 3. **Embedding Dimensionality Mismatch**: Embedding dimension must match the model (384 for multilingual-e5-small). Do not hardcode mismatched dimensions in schema.
 
