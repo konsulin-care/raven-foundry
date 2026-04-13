@@ -84,7 +84,7 @@ def mock_api_keys(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None
             pass
     """
     # Ensure no .env file is found (override the search path)
-    monkeypatch.setattr(raven.config, "_find_env_file", lambda: None)
+    monkeypatch.setattr(raven.config, "_find_env_file", lambda env_path=None: None)
 
     # Set test values in environment
     original_env = os.environ.copy()

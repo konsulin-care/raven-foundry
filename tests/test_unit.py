@@ -8,6 +8,7 @@ These tests cover:
 Run with: pytest tests/test_unit.py -v
 """
 
+import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -129,7 +130,10 @@ class TestConfigModule:
 
     def test_find_env_file_in_cwd(self, tmp_path, monkeypatch):
         """Config finds .env in current working directory."""
-        # Create .env in the current working directory
+        # Change to tmp_path first so the .env is created in the actual cwd
+        monkeypatch.chdir(tmp_path)
+
+        # Create .env in the current working directory (now tmp_path)
         env_file = tmp_path / ".env"
         env_file.write_text("OPENALEX_API_KEY=test\n")
 
@@ -235,8 +239,6 @@ class TestCLICommands:
 
     def test_info_command_db_exists_but_no_papers_table(self, tmp_path, monkeypatch):
         """Test 'raven info' when DB exists but lacks papers table."""
-        import sqlite3
-
         runner = CliRunner()
         db_path = tmp_path / "raven.db"
 
