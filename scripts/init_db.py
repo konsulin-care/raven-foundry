@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Initialize SQLite database with sqlite-vec extension for vector storage.
+Initialize SQLite database with sqlite-vector extension for vector storage.
 
 Usage:
     python scripts/init_db.py
@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 def get_vec_version(db: sqlite3.Connection) -> str | None:
-    """Get sqlite-vec extension version."""
+    """Get sqlite-vector extension version."""
     try:
         result = db.execute("SELECT vec_version()").fetchone()
         return result[0] if result else None
@@ -44,7 +44,7 @@ def init_papers_table(db: sqlite3.Connection) -> None:
 
 
 def init_embeddings_table(db: sqlite3.Connection) -> None:
-    """Create vector embeddings table using sqlite-vec."""
+    """Create vector embeddings table using sqlite-vector."""
     db.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
             paper_id INTEGER PRIMARY KEY,
@@ -94,23 +94,24 @@ def main() -> int:
     db = sqlite3.connect(db_path)
 
     try:
-        # Enable and load sqlite-vec extension
+        # Enable and load sqlite-vector extension
         db.enable_load_extension(True)
 
         try:
-            import sqlite_vec
+            import importlib.resources
 
-            sqlite_vec.load(db)
+            ext_path = importlib.resources.files("sqlite_vector.binaries") / "vector"
+            db.load_extension(str(ext_path))
         except ImportError:
-            print("Error: sqlite-vec not installed.", file=sys.stderr)
-            print("Install with: pip install sqlite-vec", file=sys.stderr)
+            print("Error: sqliteai-vector not installed.", file=sys.stderr)
+            print("Install with: pip install sqliteai-vector", file=sys.stderr)
             return 1
 
         db.enable_load_extension(False)
 
         # Check vec version
         vec_version = get_vec_version(db)
-        print(f"sqlite-vec version: {vec_version}")
+        print(f"sqliteai-vector version: {vec_version}")
 
         # Initialize tables
         init_papers_table(db)

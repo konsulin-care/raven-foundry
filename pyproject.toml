@@ -29,6 +29,7 @@ dependencies = [
     "python-dotenv",
     "groq",
     "requests",
+    "sentence-transformers>=2.0.0",
 ]
 
 [project.optional-dependencies]

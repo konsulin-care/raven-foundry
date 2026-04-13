@@ -27,7 +27,12 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from raven.config import get_openalex_api_key, get_openalex_api_url
-from raven.storage import add_paper
+from raven.embeddings import generate_embedding, generate_embeddings_batch
+from raven.storage import (
+    add_embedding,
+    add_paper,
+    get_paper_id_by_doi,
+)
 
 # Default filters for search results
 # Note: Semantic search has limited filter support (no has_doi), so we use separate filters
@@ -68,8 +73,35 @@ def normalize_doi(doi: str) -> str:
     return doi
 
 
+def combine_title_abstract(title: str, abstract: str | None) -> str:
+    """Combine title and abstract for embedding generation.
+
+    Args:
+        title: Paper title.
+        abstract: Paper abstract (may be None or empty).
+
+    Returns:
+        Combined text suitable for embedding generation.
+    """
+    if abstract and abstract.strip():
+        return f"{title} {abstract}"
+    return title
+
+
 def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
-    """Ingest a paper by DOI from OpenAlex."""
+    """Ingest a paper by DOI from OpenAlex with embedding generation.
+
+    Fetches paper metadata from OpenAlex, stores it in the database,
+    generates a semantic embedding from title + abstract, and stores
+    the embedding for vector search.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        doi: DOI of the paper to ingest.
+
+    Returns:
+        Dict with paper_id, doi, title, type, and embedding, or None on failure.
+    """
     # Get API configuration
     api_key = get_openalex_api_key()
     base_url = _get_openalex_base_url()
@@ -101,14 +133,48 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
     # Extract metadata
     title = data.get("title", "Untitled")
     paper_type = data.get("type", "article")
+    abstract = ""
+    abstract_inverted = data.get("abstract_inverted_index")
+    if abstract_inverted:
+        abstract = undo_inverted_index(abstract_inverted)
 
-    # Add to database
-    add_paper(db_path, doi, title, paper_type)
+    # Reconstruct authors list from OpenAlex format
+    authors_list = data.get("authorships", [])
+    authors = (
+        ", ".join(a.get("author", {}).get("display_name", "") for a in authors_list)
+        or None
+    )
+
+    # Add paper metadata to database
+    paper_id = add_paper(
+        db_path,
+        doi=doi,
+        title=title,
+        authors=authors,
+        abstract=abstract,
+        publication_year=data.get("publication_year"),
+        venue=data.get("host_venue", {}).get("display_name"),
+        openalex_id=data.get("id"),
+        paper_type=paper_type,
+    )
+
+    # Generate embedding from title + abstract (optional - may fail if vec extension unavailable)
+    embedding = None
+    try:
+        embedding_text = combine_title_abstract(title, abstract)
+        embedding = generate_embedding(embedding_text)
+        # Store embedding for vector search
+        add_embedding(db_path, paper_id, embedding)
+    except Exception as e:
+        # Log but continue without embedding if extension unavailable
+        logger.warning("Failed to generate/store embedding: %s", e)
 
     return {
+        "paper_id": paper_id,
         "doi": doi,
         "title": title,
         "type": paper_type,
+        "embedding": embedding,
     }
 
 
@@ -379,7 +445,7 @@ def undo_inverted_index(inverted_index: dict[str, list[int]]) -> str:
 def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
     """Format OpenAlex work result for display/storage.
 
-    Includes: DOI, Year, Type, Citation, Open Access, Abstract
+    Includes: DOI, Year, Type, Citation, Open Access, Abstract, Embedding Text
     """
     # Reconstruct abstract from inverted index if available
     abstract = ""
@@ -387,9 +453,12 @@ def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
     if abstract_inverted:
         abstract = undo_inverted_index(abstract_inverted)
 
+    # Get title for embedding text generation
+    title = work.get("title", "Untitled")
+
     return {
         "doi": work.get("doi"),
-        "title": work.get("title", "Untitled"),
+        "title": title,
         "type": work.get("type", "article"),
         "publication_year": work.get("publication_year"),
         "cited_by_count": work.get("cited_by_count", 0),
@@ -397,4 +466,123 @@ def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
         "abstract": abstract,
         "id": work.get("id"),
         "relevance_score": work.get("relevance_score"),
+        "embedding_text": combine_title_abstract(title, abstract),
     }
+
+
+def ingest_search_results(
+    db_path: Path, search_results: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Ingest multiple papers from OpenAlex search results.
+
+    Uses batch embedding generation for efficiency. Handles missing abstracts
+    gracefully by using title only.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        search_results: Dict with 'results' list from OpenAlex search API.
+
+    Returns:
+        List of ingested paper dicts with paper_id, doi, title, type, embedding.
+    """
+    results = search_results.get("results", [])
+    if not results:
+        return []
+
+    # Prepare paper data and embedding texts
+    papers_data: list[tuple[dict[str, Any], str]] = []
+    embedding_texts: list[str] = []
+
+    for work in results:
+        # Format the work result
+        formatted = format_search_result(work)
+
+        # Extract needed fields for storage
+        doi = formatted.get("doi")
+        title = formatted.get("title", "Untitled")
+        abstract = formatted.get("abstract", "")
+
+        # Reconstruct authors from authorship data
+        authors_list = work.get("authorships", [])
+        authors = (
+            ", ".join(a.get("author", {}).get("display_name", "") for a in authors_list)
+            or None
+        )
+
+        paper_info = {
+            "doi": doi,
+            "title": title,
+            "authors": authors,
+            "abstract": abstract,
+            "publication_year": work.get("publication_year"),
+            "venue": work.get("host_venue", {}).get("display_name"),
+            "openalex_id": work.get("id"),
+            "paper_type": work.get("type", "article"),
+        }
+
+        papers_data.append((paper_info, formatted["embedding_text"]))
+
+    # Batch generate embeddings (optional - may fail if vec extension unavailable)
+    embeddings = None
+    try:
+        for _, embedding_text in papers_data:
+            embedding_texts.append(embedding_text)
+        embeddings = generate_embeddings_batch(embedding_texts)
+    except Exception as e:
+        logger.warning("Failed to generate embeddings: %s", e)
+
+    # Store papers and embeddings
+    ingested = []
+    for i, (paper_info, _) in enumerate(papers_data):
+        try:
+            # Add paper to database
+            paper_id = add_paper(db_path, **paper_info)
+
+            # Add embedding if available
+            embedding = embeddings[i] if embeddings is not None else None
+            if embedding is not None:
+                try:
+                    add_embedding(db_path, paper_id, embedding)
+                except Exception as e:
+                    logger.warning("Failed to store embedding: %s", e)
+
+            ingested.append(
+                {
+                    "paper_id": paper_id,
+                    "doi": paper_info["doi"],
+                    "title": paper_info["title"],
+                    "type": paper_info["paper_type"],
+                    "embedding": embedding,
+                }
+            )
+        except ValueError as e:
+            # Paper already exists (DOI duplicate) - try to update embedding
+            doi = paper_info.get("doi")
+            if doi:
+                existing_id = get_paper_id_by_doi(db_path, doi)
+                if existing_id:
+                    # Try to add/update embedding for existing paper
+                    embedding = embeddings[i] if embeddings is not None else None
+                    if embedding is not None:
+                        try:
+                            add_embedding(db_path, existing_id, embedding)
+                            logger.info("Updated embedding for existing paper: %s", doi)
+                        except Exception as emb_err:
+                            logger.warning("Failed to update embedding: %s", emb_err)
+                    # Still return the existing paper info
+                    ingested.append(
+                        {
+                            "paper_id": existing_id,
+                            "doi": doi,
+                            "title": paper_info["title"],
+                            "type": paper_info["paper_type"],
+                            "embedding": embedding,
+                        }
+                    )
+                    continue
+            # If we couldn't find/update, log and skip
+            logger.info("Skipping duplicate paper: %s", e)
+        except Exception as e:
+            logger.error("Error ingesting paper %s: %s", paper_info.get("doi"), e)
+
+    return ingested
