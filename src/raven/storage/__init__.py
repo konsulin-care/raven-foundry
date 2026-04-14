@@ -205,12 +205,12 @@ def add_paper(
     db_path: Path,
     doi: str | None,
     title: str,
+    paper_type: str = "article",
     authors: str | None = None,
     abstract: str | None = None,
     publication_year: int | None = None,
     venue: str | None = None,
     openalex_id: str | None = None,
-    paper_type: str = "article",
 ) -> int:
     """Add a paper to the database.
 
@@ -218,12 +218,12 @@ def add_paper(
         db_path: Path to the SQLite database file.
         doi: DOI of the paper (optional, will be coerced to empty string if None).
         title: Title of the paper.
+        paper_type: Type of paper (default: 'article').
         authors: Comma-separated list of authors (optional).
         abstract: Paper abstract (optional).
         publication_year: Year of publication (optional).
         venue: Publication venue/journal (optional).
         openalex_id: OpenAlex ID for the paper (optional).
-        paper_type: Type of paper (default: 'article').
 
     Returns:
         The ID of the newly inserted paper.
