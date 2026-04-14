@@ -220,6 +220,7 @@ from raven.storage import add_paper
 | Bare except | Catch specific exceptions |
 | No type hints | Add type annotations |
 | Magic numbers | Use named constants |
+| Duplicate literals | Use named constants |
 
 ## 📂 Codebase References
 **Implementation**:

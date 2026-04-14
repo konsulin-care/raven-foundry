@@ -41,6 +41,9 @@ from raven.storage import (
 DEFAULT_FILTERS = "is_oa:true,has_doi:true"  # For keyword search
 SEMANTIC_FILTERS = "is_oa:true"  # For semantic search (limited to: is_oa, has_abstract, has_fulltext, etc.)
 
+# Default sort order for search results
+DEFAULT_SORT_ORDER = "relevance_score:desc"
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -249,7 +252,7 @@ def search_works(
     filter_str: str | None = None,
     page: int = 1,
     per_page: int = 50,
-    sort: str = "relevance_score:desc",
+    sort: str = DEFAULT_SORT_ORDER,
     use_semantic: bool = True,
 ) -> dict[str, Any]:
     """Search works via OpenAlex API.
@@ -349,7 +352,7 @@ def search_works_keyword(
     filter_str: str | None = None,
     page: int = 1,
     per_page: int = 50,
-    sort: str = "relevance_score:desc",
+    sort: str = DEFAULT_SORT_ORDER,
 ) -> dict[str, Any]:
     """Keyword-only search (explicit).
 
@@ -425,7 +428,7 @@ def search_works_semantic(
     params: dict[str, Any] = {
         "search.semantic": query,
         "filter": SEMANTIC_FILTERS,
-        "sort": "relevance_score:desc",
+        "sort": DEFAULT_SORT_ORDER,
         "per_page": min(per_page, 50),
         "api_key": api_key,
     }
@@ -509,6 +512,100 @@ def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _get_existing_paper_info(db_path: Path, doi: str) -> tuple[int | None, bool]:
+    """Check if DOI exists in database and whether it has an embedding.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        doi: DOI to check for.
+
+    Returns:
+        Tuple of (existing_paper_id, has_embedding). has_embedding is False
+        if paper doesn't exist.
+    """
+    existing_id = get_paper_id_by_doi(db_path, doi)
+    if existing_id is None:
+        return None, False
+    has_embedding = get_embedding_exists(db_path, existing_id)
+    return existing_id, has_embedding
+
+
+def _handle_existing_paper(
+    db_path: Path,
+    doi: str,
+    paper_info: dict[str, Any],
+    existing_id: int,
+    has_embedding: bool,
+) -> int | None:
+    """Handle case where DOI already exists in database.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        doi: DOI of the paper.
+        paper_info: Paper metadata dict.
+        existing_id: Existing paper ID in database.
+        has_embedding: Whether paper already has an embedding.
+
+    Returns:
+        paper_id if paper should be processed, None if fully stored (skip).
+    """
+    if has_embedding:
+        # DOI and embedding both exist - skip with info log
+        logger.info(
+            "Paper with DOI %s already fully stored (paper + embedding)",
+            doi,
+        )
+        return None
+
+    # DOI exists but no embedding - update metadata and regenerate
+    logger.info(
+        "Paper with DOI %s exists without embedding, updating and generating embedding",
+        doi,
+    )
+    # Remove doi from paper_info before passing to update_paper
+    sanitized_paper_info = {k: v for k, v in paper_info.items() if k != "doi"}
+    update_paper(db_path, existing_id, **sanitized_paper_info)
+    return existing_id
+
+
+def _prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Prepare paper info dict and embedding text from OpenAlex work result.
+
+    Args:
+        work: Single work result from OpenAlex search API.
+
+    Returns:
+        Tuple of (paper_info dict, embedding_text string).
+    """
+    # Format the work result
+    formatted = format_search_result(work)
+
+    # Extract needed fields for storage
+    doi = formatted.get("doi")
+    title = formatted.get("title", "Untitled")
+    abstract = formatted.get("abstract", "")
+
+    # Reconstruct authors from authorship data
+    authors_list = work.get("authorships", [])
+    authors = (
+        ", ".join(a.get("author", {}).get("display_name", "") for a in authors_list)
+        or None
+    )
+
+    paper_info = {
+        "doi": doi,
+        "title": title,
+        "authors": authors,
+        "abstract": abstract,
+        "publication_year": work.get("publication_year"),
+        "venue": work.get("host_venue", {}).get("display_name"),
+        "openalex_id": work.get("id"),
+        "paper_type": work.get("type", "article"),
+    }
+
+    return paper_info, formatted["embedding_text"]
+
+
 def ingest_search_results(
     db_path: Path, search_results: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -530,42 +627,15 @@ def ingest_search_results(
 
     # Prepare paper data and embedding texts
     papers_data: list[tuple[dict[str, Any], str]] = []
-    embedding_texts: list[str] = []
 
     for work in results:
-        # Format the work result
-        formatted = format_search_result(work)
-
-        # Extract needed fields for storage
-        doi = formatted.get("doi")
-        title = formatted.get("title", "Untitled")
-        abstract = formatted.get("abstract", "")
-
-        # Reconstruct authors from authorship data
-        authors_list = work.get("authorships", [])
-        authors = (
-            ", ".join(a.get("author", {}).get("display_name", "") for a in authors_list)
-            or None
-        )
-
-        paper_info = {
-            "doi": doi,
-            "title": title,
-            "authors": authors,
-            "abstract": abstract,
-            "publication_year": work.get("publication_year"),
-            "venue": work.get("host_venue", {}).get("display_name"),
-            "openalex_id": work.get("id"),
-            "paper_type": work.get("type", "article"),
-        }
-
-        papers_data.append((paper_info, formatted["embedding_text"]))
+        paper_info, embedding_text = _prepare_paper_info(work)
+        papers_data.append((paper_info, embedding_text))
 
     # Batch generate embeddings (optional - may fail if vec extension unavailable)
     embeddings = None
     try:
-        for _, embedding_text in papers_data:
-            embedding_texts.append(embedding_text)
+        embedding_texts = [text for _, text in papers_data]
         embeddings = generate_embeddings_batch(embedding_texts)
     except Exception as e:
         logger.warning("Failed to generate embeddings: %s", e)
@@ -574,19 +644,18 @@ def ingest_search_results(
     ingested = []
     for i, (paper_info, _) in enumerate(papers_data):
         doi = paper_info.get("doi")
+        embedding = embeddings[i] if embeddings is not None else None
 
+        # Handle DOI-based deduplication
         if doi:
-            # Check if DOI exists first (idempotent pattern)
-            existing_id = get_paper_id_by_doi(db_path, doi)
+            existing_id, has_embedding = _get_existing_paper_info(db_path, doi)
 
             if existing_id is not None:
-                # DOI exists - check if embedding exists
-                if get_embedding_exists(db_path, existing_id):
-                    # DOI and embedding both exist - skip with info log
-                    logger.info(
-                        "Paper with DOI %s already fully stored (paper + embedding)",
-                        doi,
-                    )
+                paper_id = _handle_existing_paper(
+                    db_path, doi, paper_info, existing_id, has_embedding
+                )
+                if paper_id is None:
+                    # Already fully stored - add to results with None embedding
                     ingested.append(
                         {
                             "paper_id": existing_id,
@@ -597,18 +666,6 @@ def ingest_search_results(
                         }
                     )
                     continue
-                else:
-                    # DOI exists but no embedding - update metadata and regenerate
-                    logger.info(
-                        "Paper with DOI %s exists without embedding, updating and generating embedding",
-                        doi,
-                    )
-                    # Remove doi from paper_info before passing to update_paper
-                    sanitized_paper_info = {
-                        k: v for k, v in paper_info.items() if k != "doi"
-                    }
-                    update_paper(db_path, existing_id, **sanitized_paper_info)
-                    paper_id = existing_id
             else:
                 # New DOI - add paper
                 logger.info("Adding new paper with DOI %s", doi)
@@ -618,7 +675,6 @@ def ingest_search_results(
             paper_id = add_paper(db_path, **paper_info)
 
         # Add embedding if available
-        embedding = embeddings[i] if embeddings is not None else None
         if embedding is not None:
             try:
                 add_embedding(db_path, paper_id, embedding)

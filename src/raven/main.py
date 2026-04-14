@@ -9,6 +9,7 @@ import click
 
 from raven.config import _get_data_dir, _load_config
 from raven.embeddings import clean_model_cache, get_model_cache_size
+from raven.ingestion import DEFAULT_SORT_ORDER
 
 # Configure logging to show INFO level messages in CLI
 logging.basicConfig(
@@ -99,7 +100,7 @@ def cli(ctx: click.Context) -> None:
 )
 @click.option(
     "--sort",
-    default="relevance_score:desc",
+    default=DEFAULT_SORT_ORDER,
     help="Sort order in OpenAlex format (e.g., 'publication_year:desc,relevance_score:desc')",
 )
 @click.option(
@@ -144,70 +145,98 @@ def search(
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
     if local:
-        # Local database search (original behavior)
-        from raven.storage import search_papers
-
-        results = search_papers(db_path, query)
-
-        if not results:
-            click.echo("No results found in local database.")
-            return
-
-        for paper in results:
-            click.echo(f"Title: {paper['title']}")
-            click.echo(f"DOI: {paper['doi']}")
-            click.echo(f"Type: {paper['type']}")
-            click.echo("---")
+        _search_local(db_path, query)
     else:
-        # OpenAlex search
-        from raven.ingestion import format_search_result, search_works
+        _search_openalex(query, filter_str, page, per_page, sort, use_semantic)
 
-        result_data = search_works(
-            query=query,
-            filter_str=filter_str,
-            page=page,
-            per_page=per_page,
-            sort=sort,
-            use_semantic=use_semantic,
-        )
 
-        results = result_data.get("results", [])
-        meta = result_data.get("meta", {})
-        search_type = result_data.get("search_type", "unknown")
+def _search_local(db_path: Path, query: str) -> None:
+    """Search local database and display results."""
+    from raven.storage import search_papers
 
-        if not results:
-            click.echo("No results found.")
-            return
+    results = search_papers(db_path, query)
 
-        click.echo(f"Search type: {search_type}")
-        click.echo(f"Total results: {meta.get('count', 'unknown')}")
-        click.echo(f"Page: {page} of ~{(meta.get('count', 0) // per_page) + 1}")
+    if not results:
+        click.echo("No results found in local database.")
+        return
+
+    for paper in results:
+        click.echo(f"Title: {paper['title']}")
+        click.echo(f"DOI: {paper['doi']}")
+        click.echo(f"Type: {paper['type']}")
         click.echo("---")
 
-        for i, work in enumerate(results, 1):
-            formatted = format_search_result(work)
-            click.echo(f"{i}. {formatted['title']}")
-            click.echo(f"   DOI: {formatted['doi'] or 'N/A'}")
-            click.echo(f"   Year: {formatted.get('publication_year', 'N/A')}")
-            click.echo(f"   Type: {formatted['type']}")
-            click.echo(f"   Citations: {formatted.get('cited_by_count', 0)}")
-            click.echo(
-                f"   Open Access: {'Yes' if formatted.get('open_access') else 'No'}"
-            )
-            if formatted.get("relevance_score"):
-                click.echo(f"   Relevance: {formatted['relevance_score']:.3f}")
-            if formatted.get("abstract"):
-                abstract_preview = formatted["abstract"][:300]
-                if len(formatted["abstract"]) > 300:
-                    abstract_preview += "..."
-                click.echo(f"   Abstract: {abstract_preview}")
-            click.echo("---")
 
-        # Prompt for ingestion if results found
-        if results:
-            click.echo("To ingest a paper, run:")
-            click.echo("  raven ingest <DOI>")
-            click.echo("Or use the interactive mode (coming soon).")
+def _search_openalex(
+    query: str,
+    filter_str: Optional[str],
+    page: int,
+    per_page: int,
+    sort: str,
+    use_semantic: bool,
+) -> None:
+    """Search OpenAlex and display results."""
+    from raven.ingestion import search_works
+
+    result_data = search_works(
+        query=query,
+        filter_str=filter_str,
+        page=page,
+        per_page=per_page,
+        sort=sort,
+        use_semantic=use_semantic,
+    )
+
+    results = result_data.get("results", [])
+    meta = result_data.get("meta", {})
+    search_type = result_data.get("search_type", "unknown")
+
+    if not results:
+        click.echo("No results found.")
+        return
+
+    click.echo(f"Search type: {search_type}")
+    click.echo(f"Total results: {meta.get('count', 'unknown')}")
+    click.echo(f"Page: {page} of ~{(meta.get('count', 0) // per_page) + 1}")
+    click.echo("---")
+
+    _display_results(results)
+
+    click.echo("To ingest a paper, run:")
+    click.echo("  raven ingest <DOI>")
+    click.echo("Or use the interactive mode (coming soon).")
+
+
+def _display_results(results: list) -> None:
+    """Display search results with formatting."""
+    from raven.ingestion import format_search_result
+
+    for i, work in enumerate(results, 1):
+        formatted = format_search_result(work)
+        _print_formatted_result(i, formatted)
+
+
+def _print_formatted_result(index: int, formatted: dict) -> None:
+    """Print a single formatted result."""
+    click.echo(f"{index}. {formatted['title']}")
+    click.echo(f"   DOI: {formatted['doi'] or 'N/A'}")
+    click.echo(f"   Year: {formatted.get('publication_year', 'N/A')}")
+    click.echo(f"   Type: {formatted['type']}")
+    click.echo(f"   Citations: {formatted.get('cited_by_count', 0)}")
+    click.echo(f"   Open Access: {'Yes' if formatted.get('open_access') else 'No'}")
+    if formatted.get("relevance_score"):
+        click.echo(f"   Relevance: {formatted['relevance_score']:.3f}")
+    _print_abstract(formatted)
+    click.echo("---")
+
+
+def _print_abstract(formatted: dict) -> None:
+    """Print abstract preview if available."""
+    if formatted.get("abstract"):
+        abstract_preview = formatted["abstract"][:300]
+        if len(formatted["abstract"]) > 300:
+            abstract_preview += "..."
+        click.echo(f"   Abstract: {abstract_preview}")
 
 
 @cli.command()
