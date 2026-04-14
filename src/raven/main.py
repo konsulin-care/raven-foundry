@@ -1,11 +1,21 @@
 """CLI entry point for Raven - offline-first research system."""
 
+import logging
+import sys
 from pathlib import Path
 from typing import Optional
 
 import click
 
 from raven.config import _get_data_dir, _load_config
+from raven.embeddings import clean_model_cache, get_model_cache_size
+
+# Configure logging to show INFO level messages in CLI
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    stream=sys.stderr,
+)
 
 
 def _get_version() -> str:
@@ -67,29 +77,137 @@ def cli(ctx: click.Context) -> None:
     default=None,
     help="Path to .env file",
 )
+@click.option(
+    "--filter",
+    "-f",
+    "filter_str",
+    default=None,
+    help="Additional OpenAlex filters (e.g., publication_year:>2020,type:article)",
+)
+@click.option(
+    "--page",
+    "-p",
+    default=1,
+    type=int,
+    help="Page number for pagination",
+)
+@click.option(
+    "--per-page",
+    default=50,
+    type=int,
+    help="Results per page (max 100 for keyword, 50 for semantic)",
+)
+@click.option(
+    "--sort",
+    default="relevance_score:desc",
+    help="Sort order in OpenAlex format (e.g., 'publication_year:desc,relevance_score:desc')",
+)
+@click.option(
+    "--local",
+    is_flag=True,
+    default=False,
+    help="Search local database instead of OpenAlex",
+)
+@click.option(
+    "--semantic/--keyword",
+    "use_semantic",
+    default=True,
+    help="Search mode: semantic (default) or keyword only",
+)
 @click.pass_context
 def search(
-    ctx: click.Context, query: str, db: Optional[Path], env: Optional[Path]
+    ctx: click.Context,
+    query: str,
+    db: Optional[Path],
+    env: Optional[Path],
+    filter_str: Optional[str],
+    page: int,
+    per_page: int,
+    sort: str,
+    use_semantic: bool,
+    local: bool,
 ) -> None:
-    """Search publications by query string."""
-    from raven.storage import search_papers
+    """Search publications by query string.
 
+    Uses OpenAlex semantic search by default (with keyword fallback).
+    Set --local to search local database instead.
+
+    Examples:
+        raven search "machine learning in healthcare"
+        raven search "AI" --filter "publication_year:>2020" --page 2
+        raven search "dna methylation" --keyword  # Force keyword search
+        raven search "neur*" --local  # Local DB search
+    """
     db_path = _resolve_db_path(env, db)
 
     if not db_path.parent.exists():
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    results = search_papers(db_path, query)
+    if local:
+        # Local database search (original behavior)
+        from raven.storage import search_papers
 
-    if not results:
-        click.echo("No results found.")
-        return
+        results = search_papers(db_path, query)
 
-    for paper in results:
-        click.echo(f"Title: {paper['title']}")
-        click.echo(f"DOI: {paper['doi']}")
-        click.echo(f"Type: {paper['type']}")
+        if not results:
+            click.echo("No results found in local database.")
+            return
+
+        for paper in results:
+            click.echo(f"Title: {paper['title']}")
+            click.echo(f"DOI: {paper['doi']}")
+            click.echo(f"Type: {paper['type']}")
+            click.echo("---")
+    else:
+        # OpenAlex search
+        from raven.ingestion import format_search_result, search_works
+
+        result_data = search_works(
+            query=query,
+            filter_str=filter_str,
+            page=page,
+            per_page=per_page,
+            sort=sort,
+            use_semantic=use_semantic,
+        )
+
+        results = result_data.get("results", [])
+        meta = result_data.get("meta", {})
+        search_type = result_data.get("search_type", "unknown")
+
+        if not results:
+            click.echo("No results found.")
+            return
+
+        click.echo(f"Search type: {search_type}")
+        click.echo(f"Total results: {meta.get('count', 'unknown')}")
+        click.echo(f"Page: {page} of ~{(meta.get('count', 0) // per_page) + 1}")
         click.echo("---")
+
+        for i, work in enumerate(results, 1):
+            formatted = format_search_result(work)
+            click.echo(f"{i}. {formatted['title']}")
+            click.echo(f"   DOI: {formatted['doi'] or 'N/A'}")
+            click.echo(f"   Year: {formatted.get('publication_year', 'N/A')}")
+            click.echo(f"   Type: {formatted['type']}")
+            click.echo(f"   Citations: {formatted.get('cited_by_count', 0)}")
+            click.echo(
+                f"   Open Access: {'Yes' if formatted.get('open_access') else 'No'}"
+            )
+            if formatted.get("relevance_score"):
+                click.echo(f"   Relevance: {formatted['relevance_score']:.3f}")
+            if formatted.get("abstract"):
+                abstract_preview = formatted["abstract"][:300]
+                if len(formatted["abstract"]) > 300:
+                    abstract_preview += "..."
+                click.echo(f"   Abstract: {abstract_preview}")
+            click.echo("---")
+
+        # Prompt for ingestion if results found
+        if results:
+            click.echo("To ingest a paper, run:")
+            click.echo("  raven ingest <DOI>")
+            click.echo("Or use the interactive mode (coming soon).")
 
 
 @cli.command()
@@ -155,6 +273,44 @@ def init(ctx: click.Context, db: Optional[Path], env: Optional[Path]) -> None:
 
     init_database(db_path)
     click.echo(f"Database initialized at: {db_path}")
+
+
+def _format_size(size_bytes: float) -> str:
+    """Format bytes into human-readable size string."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
+
+
+@cli.group()
+def cache() -> None:
+    """Manage the model cache."""
+    pass
+
+
+@cache.command()
+def status() -> None:
+    """Show cache status and size."""
+    from raven.embeddings import _get_model_cache_dir
+
+    cache_dir = _get_model_cache_dir()
+    cache_size = get_model_cache_size()
+
+    click.echo(f"Cache directory: {cache_dir}")
+
+    if cache_size is None:
+        click.echo("Cache size: No cache found")
+    else:
+        click.echo(f"Cache size: {_format_size(cache_size)}")
+
+
+@cache.command()
+def clean() -> None:
+    """Delete the model cache."""
+    clean_model_cache()
+    click.echo("Cache cleaned successfully")
 
 
 @cli.command()

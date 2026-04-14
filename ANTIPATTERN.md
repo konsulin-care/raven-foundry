@@ -57,7 +57,7 @@ Embedding dimension must match the model (384 for multilingual-e5-small). Do not
 
 Use `COLLATE NOCASE` for DOI columns and `LOWER()` in queries to ensure case-insensitive matching. DOI is case-insensitive.
 
-## 5. Local Imports in Tests *(Requires Exception Process)*
+## 5. Local Imports in Functions *(Requires Exception Process)*
 
 Move all imports to module level. Local imports inside functions are harder to mock and hurt test readability.
    ```python
@@ -72,3 +72,22 @@ Move all imports to module level. Local imports inside functions are harder to m
    def test_something(self):
        function()
    ```
+
+## 6. Shadowing Built-in Names *(Requires Exception Process)*
+
+Never redefine Python built-in names (filter, map, sorted, list, set, dict, type, id, input, open, print, len, range, zip, int, str). These are core Python functions available in every scope. Shadowing them makes the original inaccessible and creates confusing bugs.
+   ```python
+   # WRONG (Without Reason)
+   def search_works(query: str, filter: str | None = None):  # Shadows built-in!
+       ...
+
+   # CORRECT (Use _str suffix or descriptive name)
+   def search_works(query: str, filter_str: str | None = None):
+       ...
+
+   # Alternative: Use descriptive alternative names
+   def search_works(query: str, search_filter: str | None = None):
+       ...
+   ```
+
+**Why this matters**: `filter` is one of Python's most used built-ins. A function parameter named `filter` shadows it globally, making the built-in unreadable within that function's scope and any nested scopes.

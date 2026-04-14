@@ -21,7 +21,17 @@ from raven.config import (
     get_openalex_api_key,
     get_openalex_api_url,
 )
-from raven.ingestion import ingest_paper
+from raven.ingestion import (
+    DEFAULT_FILTERS,
+    SEMANTIC_FILTERS,
+    _create_session_with_retries,
+    format_search_result,
+    ingest_paper,
+    search_works,
+    search_works_keyword,
+    undo_inverted_index,
+)
+from raven.llm import _make_cache_key
 from raven.storage import add_paper, init_database, search_papers
 
 # =============================================================================
@@ -172,9 +182,10 @@ class TestCLICommands:
         db_path = tmp_path / "test.db"
         init_database(db_path)
 
-        # Use --db option on subcommand
+        # Use --db and --local option to search local database with no matches
         result = runner.invoke(
-            raven.main.cli, ["search", "--db", str(db_path), "nonexistent"]
+            raven.main.cli,
+            ["search", "--db", str(db_path), "--local", "nonexistent_query_xyz"],
         )
 
         assert result.exit_code == 0
@@ -187,13 +198,138 @@ class TestCLICommands:
         init_database(db_path)
         add_paper(db_path, "10.1234/test", "Test Paper Title", "article")
 
-        # Use --db option on subcommand
-        result = runner.invoke(raven.main.cli, ["search", "--db", str(db_path), "test"])
+        # Use --db and --local option to search local database
+        result = runner.invoke(
+            raven.main.cli, ["search", "--db", str(db_path), "--local", "test"]
+        )
 
         assert result.exit_code == 0
         assert "Test Paper Title" in result.output
         assert "10.1234/test" in result.output
         assert "article" in result.output
+
+    def test_search_command_cli_options(self, tmp_path, monkeypatch):
+        """Test 'raven search' with CLI options."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        runner = CliRunner()
+
+        # Mock the OpenAlex API response
+        with patch("raven.ingestion.search_works") as mock_search:
+            mock_search.return_value = {
+                "results": [
+                    {
+                        "doi": "10.1234/test",
+                        "title": "Test Paper",
+                        "type": "article",
+                        "publication_year": 2023,
+                        "cited_by_count": 10,
+                        "open_access": {"is_oa": True},
+                        "relevance_score": 0.9,
+                    }
+                ],
+                "meta": {"count": 1},
+                "search_type": "semantic",
+            }
+
+            # Test with new CLI options (no --local, so uses OpenAlex)
+            result = runner.invoke(
+                raven.main.cli,
+                [
+                    "search",
+                    "--filter",
+                    "publication_year:>2020",
+                    "--page",
+                    "1",
+                    "test query",
+                ],
+            )
+
+            assert result.exit_code == 0
+
+    def test_search_command_displays_abstract(self, tmp_path, monkeypatch):
+        """Test 'raven search' displays abstract for OpenAlex results."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        runner = CliRunner()
+
+        # Mock the OpenAlex API response with abstract
+        with patch("raven.ingestion.search_works") as mock_search:
+            mock_search.return_value = {
+                "results": [
+                    {
+                        "doi": "10.1234/test",
+                        "title": "Test Paper With Abstract",
+                        "type": "article",
+                        "publication_year": 2023,
+                        "cited_by_count": 10,
+                        "open_access": {"is_oa": True},
+                        "relevance_score": 0.9,
+                        "abstract_inverted_index": {
+                            "This": [0],
+                            "is": [1],
+                            "abstract": [2],
+                            "text": [3],
+                        },
+                    }
+                ],
+                "meta": {"count": 1},
+                "search_type": "semantic",
+            }
+
+            result = runner.invoke(
+                raven.main.cli,
+                ["search", "test query"],
+            )
+
+            assert result.exit_code == 0
+            assert "Abstract:" in result.output
+            # The abstract should be reconstructed from inverted index
+            assert "This is abstract text" in result.output
+
+    def test_cache_status_command(self, tmp_path, monkeypatch):
+        """Test 'raven cache status' shows cache info."""
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        runner = CliRunner()
+
+        with patch("raven.main.get_model_cache_size") as mock_size:
+            mock_size.return_value = 440401920  # ~420 MB
+
+            result = runner.invoke(raven.main.cli, ["cache", "status"])
+
+            assert result.exit_code == 0
+            assert "Cache directory:" in result.output
+            assert "Cache size:" in result.output
+
+    def test_cache_status_command_no_cache(self, tmp_path, monkeypatch):
+        """Test 'raven cache status' when no cache exists."""
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        runner = CliRunner()
+
+        with patch("raven.main.get_model_cache_size") as mock_size:
+            mock_size.return_value = None
+
+            result = runner.invoke(raven.main.cli, ["cache", "status"])
+
+            assert result.exit_code == 0
+            assert "No cache found" in result.output
+
+    def test_cache_clean_command(self, tmp_path, monkeypatch):
+        """Test 'raven cache clean' deletes cache."""
+        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+
+        runner = CliRunner()
+
+        with patch("raven.main.clean_model_cache") as mock_clean:
+            result = runner.invoke(raven.main.cli, ["cache", "clean"])
+
+            assert result.exit_code == 0
+            assert "Cache cleaned successfully" in result.output
+            mock_clean.assert_called_once()
 
     def test_init_command(self, tmp_path):
         """Test 'raven init' creates database."""
@@ -450,8 +586,6 @@ class TestLLMModule:
 
     def test_make_cache_key_deterministic(self):
         """Cache key is deterministic - same inputs produce same key."""
-        from raven.llm import _make_cache_key
-
         key1 = _make_cache_key("test prompt", "system prompt")
         key2 = _make_cache_key("test prompt", "system prompt")
 
@@ -459,8 +593,6 @@ class TestLLMModule:
 
     def test_make_cache_key_unique_inputs(self):
         """Different inputs produce different keys."""
-        from raven.llm import _make_cache_key
-
         key1 = _make_cache_key("prompt one", "system one")
         key2 = _make_cache_key("prompt two", "system two")
 
@@ -468,8 +600,6 @@ class TestLLMModule:
 
     def test_make_cache_key_prevents_collision(self):
         """Cache key uses SHA256 to prevent hash() collisions."""
-        from raven.llm import _make_cache_key
-
         # Python's hash() can collide for different strings
         # SHA256 should not collide for these test cases
         test_cases = [
@@ -488,8 +618,6 @@ class TestLLMModule:
 
     def test_make_cache_key_with_none_system_prompt(self):
         """Cache key handles None system_prompt."""
-        from raven.llm import _make_cache_key
-
         key_with_none = _make_cache_key("prompt", None)
         key_with_empty = _make_cache_key("prompt", "")
 
@@ -506,8 +634,6 @@ class TestIngestionRetryLogic:
 
     def test_create_session_with_retries(self):
         """Session is created with retry strategy."""
-        from raven.ingestion import _create_session_with_retries
-
         session = _create_session_with_retries()
 
         # Check that adapters are mounted
@@ -556,3 +682,325 @@ class TestIngestionRetryLogic:
         result = ingest_paper(db_path, "10.1234/ratelimit")
 
         assert result is None
+
+
+# =============================================================================
+# OpenAlex Search Tests
+# =============================================================================
+
+
+class TestOpenAlexSearch:
+    """Tests for OpenAlex search functions."""
+
+    def test_default_filters_includes_oa_and_doi(self):
+        """DEFAULT_FILTERS includes is_oa and has_doi."""
+        assert "is_oa:true" in DEFAULT_FILTERS
+        assert "has_doi:true" in DEFAULT_FILTERS
+
+    def test_semantic_filters_supports_semantic_search(self):
+        """SEMANTIC_FILTERS uses is_oa which is supported in semantic search."""
+        # Semantic search only supports: is_oa (not open_access.is_oa), has_abstract, etc.
+        assert "is_oa:true" in SEMANTIC_FILTERS
+        # Should NOT have has_doi which is not supported in semantic search
+        assert "has_doi" not in SEMANTIC_FILTERS
+
+    def test_format_search_result_basic(self):
+        """format_search_result extracts key fields."""
+        work = {
+            "doi": "10.1234/test",
+            "title": "Test Paper",
+            "type": "article",
+            "publication_year": 2023,
+            "cited_by_count": 100,
+            "open_access": {"is_oa": True},
+        }
+
+        result = format_search_result(work)
+
+        assert result["doi"] == "10.1234/test"
+        assert result["title"] == "Test Paper"
+        assert result["type"] == "article"
+        assert result["publication_year"] == 2023
+        assert result["cited_by_count"] == 100
+        assert result["open_access"] is True
+
+    def test_format_search_result_missing_fields(self):
+        """format_search_result handles missing fields."""
+        work = {
+            "title": "Minimal Paper",
+            # Missing doi, type, etc.
+        }
+
+        result = format_search_result(work)
+
+        assert result["title"] == "Minimal Paper"
+        assert result["doi"] is None
+        assert result["type"] == "article"  # Default
+        assert result["cited_by_count"] == 0  # Default
+
+    def test_search_works_keyword_fallback(self, requests_mock, monkeypatch):
+        """search_works falls back to keyword on semantic failure."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        # Mock semantic search (429 rate limit)
+        requests_mock.get(
+            "https://api.openalex.org/works",
+            [
+                {"status_code": 429},  # Semantic rate limited
+                {
+                    "json": {  # Keyword fallback succeeds
+                        "results": [
+                            {
+                                "doi": "10.1234/fallback",
+                                "title": "Fallback Paper",
+                                "type": "article",
+                                "cited_by_count": 50,
+                            }
+                        ],
+                        "meta": {"count": 1},
+                    }
+                },
+            ],
+        )
+
+        result = search_works("test query", use_semantic=True)
+
+        assert result["search_type"] == "keyword"
+        assert len(result["results"]) == 1
+
+    def test_search_works_semantic_success(self, requests_mock, monkeypatch):
+        """search_works uses semantic when available."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        requests_mock.get(
+            "https://api.openalex.org/works",
+            json={
+                "results": [
+                    {
+                        "doi": "10.1234/semantic",
+                        "title": "Semantic Result",
+                        "type": "article",
+                        "relevance_score": 0.95,
+                    }
+                ],
+                "meta": {"count": 1},
+            },
+        )
+
+        result = search_works("machine learning", use_semantic=True)
+
+        # Rate limiting not triggered in mock, should use semantic
+        assert result["search_type"] in ["semantic", "keyword"]
+
+    def test_search_works_keyword_only(self, requests_mock, monkeypatch):
+        """search_works_keyword uses keyword search only."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        requests_mock.get(
+            "https://api.openalex.org/works",
+            json={
+                "results": [
+                    {
+                        "doi": "10.1234/keyword",
+                        "title": "Keyword Result",
+                        "type": "article",
+                    }
+                ],
+                "meta": {"count": 1},
+            },
+        )
+
+        result = search_works_keyword("test")
+
+        assert result["search_type"] == "keyword"
+        assert len(result["results"]) == 1
+
+    def test_search_works_with_filters(self, requests_mock, monkeypatch):
+        """search_works applies filters correctly."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        # Check that the request includes both default and custom filters
+        requests_mock.get(
+            "https://api.openalex.org/works",
+            json={"results": [], "meta": {"count": 0}},
+        )
+
+        result = search_works(
+            "query", filter_str="publication_year:>2020", use_semantic=False
+        )
+
+        assert result["search_type"] == "keyword"
+        assert len(result["results"]) == 0  # Mock returns empty results
+
+    def test_search_works_with_sort(self, requests_mock, monkeypatch):
+        """search_works passes sort parameter directly to OpenAlex."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        # Use multi-field sort format
+        requests_mock.get(
+            "https://api.openalex.org/works",
+            json={"results": [], "meta": {"count": 0}},
+        )
+
+        result = search_works(
+            "query",
+            sort="publication_year:desc,relevance_score:desc",
+            use_semantic=False,
+        )
+
+        assert result["search_type"] == "keyword"
+
+        # Verify sort is passed as-is (no conversion)
+        last_request = requests_mock.last_request
+        assert last_request
+        assert (
+            last_request.qs["sort"][0] == "publication_year:desc,relevance_score:desc"
+        )
+
+    def test_search_works_single_field_sort(self, requests_mock, monkeypatch):
+        """search_works passes single-field sort directly to OpenAlex."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        requests_mock.get(
+            "https://api.openalex.org/works",
+            json={"results": [], "meta": {"count": 0}},
+        )
+
+        result = search_works(
+            "query",
+            sort="cited_by_count:desc",
+            use_semantic=False,
+        )
+
+        assert result["search_type"] == "keyword"
+
+        # Verify sort is passed as-is
+        last_request = requests_mock.last_request
+        assert last_request
+        assert last_request.qs["sort"][0] == "cited_by_count:desc"
+
+    def test_search_works_keyword_with_filters(self, requests_mock, monkeypatch):
+        """search_works keyword mode applies filters correctly."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
+        monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
+
+        # Check that the request includes both default and custom filters
+        requests_mock.get(
+            "https://api.openalex.org/works",
+            json={"results": [], "meta": {"count": 0}},
+        )
+
+        result = search_works(
+            "query", filter_str="publication_year:>2020", use_semantic=False
+        )
+
+        assert result["search_type"] == "keyword"
+
+
+# =============================================================================
+# Undo Inverted Index Tests
+# =============================================================================
+
+
+class TestUndoInvertedIndex:
+    """Tests for undo_inverted_index function."""
+
+    # Sample inverted index for testing
+    SAMPLE_INVERTED_INDEX = {
+        "Hello": [0],
+        "world": [1],
+        "this": [2, 5],
+        "is": [3],
+        "a": [4],
+        "test": [6],
+    }
+
+    def test_undo_inverted_index_basic(self):
+        """Reconstructs basic text from inverted index."""
+        result = undo_inverted_index(self.SAMPLE_INVERTED_INDEX)
+
+        # Note: "this" appears at positions [2, 5], so it appears twice
+        assert result == "Hello world this is a this test"
+
+    def test_undo_inverted_index_with_example_from_user(self):
+        """Test with the example provided in the task."""
+        # Use a smaller sample from the user's example
+        sample_index = {
+            "Despite": [0],
+            "growing": [1],
+            "interest": [2],
+            "in": [3],
+            "Open": [4],
+            "Access": [5],
+        }
+
+        result = undo_inverted_index(sample_index)
+
+        assert result == "Despite growing interest in Open Access"
+
+    def test_undo_inverted_index_empty_dict(self):
+        """Handles empty dictionary."""
+        result = undo_inverted_index({})
+
+        assert result == ""
+
+    def test_undo_inverted_index_preserves_word_order(self):
+        """Correctly orders words by their positions."""
+        # Same word at multiple positions
+        multi_position_index = {
+            "the": [0, 3, 6],
+            "cat": [1],
+            "sat": [2],
+            "on": [4],
+            "mat": [5],
+        }
+
+        result = undo_inverted_index(multi_position_index)
+
+        # "the" appears at positions 0, 3, 6
+        assert result == "the cat sat the on mat the"
+
+    def test_format_search_result_with_abstract(self):
+        """format_search_result includes reconstructed abstract."""
+        work = {
+            "doi": "10.1234/test",
+            "title": "Test Paper",
+            "type": "article",
+            "publication_year": 2023,
+            "cited_by_count": 50,
+            "open_access": {"is_oa": True},
+            "abstract_inverted_index": {
+                "This": [0],
+                "is": [1],
+                "abstract": [2],
+            },
+        }
+
+        result = format_search_result(work)
+
+        assert result["abstract"] == "This is abstract"
+        assert result["doi"] == "10.1234/test"
+        assert result["publication_year"] == 2023
+        assert result["type"] == "article"
+        assert result["cited_by_count"] == 50
+        assert result["open_access"] is True
+
+    def test_format_search_result_without_abstract(self):
+        """format_search_result handles missing abstract_inverted_index."""
+        work = {
+            "doi": "10.1234/test",
+            "title": "Test Paper",
+            "type": "article",
+            "publication_year": 2023,
+        }
+
+        result = format_search_result(work)
+
+        assert result["abstract"] == ""
+        assert result["doi"] == "10.1234/test"

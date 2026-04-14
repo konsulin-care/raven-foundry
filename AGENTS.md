@@ -5,7 +5,7 @@ Entry point: raven.main:main
 
 Stack:
 - Python CLI application
-- SQLite + sqlite-vector for local storage
+- SQLite + sqliteai-vector for local storage
 - OpenAlex API for scientific metadata
 - Groq LLM for reasoning tasks (rate-limited + cached)
 
@@ -15,6 +15,8 @@ Rules:
 - Maintain compatibility with pip-installable CLI entrypoint
 - Implement unit tests for each new functionality, unless the unit tests would introduce redundancy to the current test suites
 - Tests should pass in pre-commit hooks (.pre-commit-config.yaml)
+- OpenAlex API is the default search platform to use
+- Use Context7 when implementing search using OpenAlex API
 
 Testing Requirements:
 - Every function with a return value should have a corresponding unit test, unless it has been indirectly tested
