@@ -84,6 +84,33 @@ class TestInitDatabase:
         # Database file should exist
         assert db_path.exists()
 
+    def test_init_database_creates_valid_columns(self, tmp_path, mocker):
+        """init_database creates tables with expected columns."""
+        db_path = tmp_path / "test.db"
+
+        # Mock the vector extension loader
+        mocker.patch("raven.storage._load_vector_extension")
+        init_database(db_path)
+
+        # Verify expected columns exist
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute("PRAGMA table_info(papers)")
+            columns = {row[1] for row in cursor.fetchall()}
+
+        expected_columns = {
+            "id",
+            "doi",
+            "title",
+            "authors",
+            "abstract",
+            "publication_year",
+            "venue",
+            "type",
+            "created_at",
+            "openalex_id",
+        }
+        assert expected_columns.issubset(columns)
+
 
 class TestDatabaseWithFixture:
     """Tests using a shared fixture that sets up database properly for testing.

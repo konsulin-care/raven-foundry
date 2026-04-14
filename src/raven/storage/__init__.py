@@ -90,9 +90,16 @@ def init_database(db_path: Path) -> None:
             "openalex_id": "TEXT",
         }
 
+        # Validate column whitelist once at start (catch dev errors in columns_to_add)
+        valid_columns = frozenset(columns_to_add.keys())
+        for col_name in columns_to_add:
+            if col_name not in valid_columns:
+                raise ValueError(f"Invalid column name in migration: {col_name}")
+
+        # Add missing columns with quoted identifier to prevent SQL injection
         for col_name, col_type in columns_to_add.items():
             if col_name not in existing_columns:
-                conn.execute(f"ALTER TABLE papers ADD COLUMN {col_name} {col_type}")
+                conn.execute(f"ALTER TABLE papers ADD COLUMN [{col_name}] {col_type}")
 
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_openalex_id ON papers(openalex_id)"
