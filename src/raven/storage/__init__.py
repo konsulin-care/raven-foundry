@@ -78,9 +78,28 @@ def init_database(db_path: Path) -> None:
             )
         """)
 
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi)
-        """)
+        # Migration: Add missing columns for existing databases
+        columns_result = conn.execute("PRAGMA table_info('papers')").fetchall()
+        existing_columns = {row[1] for row in columns_result}
+
+        columns_to_add = {
+            "authors": "TEXT",
+            "abstract": "TEXT",
+            "publication_year": "INTEGER",
+            "venue": "TEXT",
+            "openalex_id": "TEXT",
+        }
+
+        for col_name, col_type in columns_to_add.items():
+            if col_name not in existing_columns:
+                conn.execute(f"ALTER TABLE papers ADD COLUMN {col_name} {col_type}")
+
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_openalex_id ON papers(openalex_id)"
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi COLLATE NOCASE)"
+        )
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_papers_type ON papers(type)
