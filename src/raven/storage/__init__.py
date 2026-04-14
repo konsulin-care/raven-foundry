@@ -117,6 +117,7 @@ def _safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> 
             "venue",
             "openalex_id",
             "identifier",
+            "type",
         }
     )
 
@@ -156,8 +157,9 @@ def init_database(db_path: Path) -> None:
         """)
 
         # Migration: Add missing columns for existing databases
+        # CRITICAL: Capture original columns BEFORE any modifications
         columns_result = conn.execute("PRAGMA table_info('papers')").fetchall()
-        existing_columns = {row[1] for row in columns_result}
+        original_columns = {row[1] for row in columns_result}
 
         columns_to_add = {
             "authors": "TEXT",
@@ -166,32 +168,27 @@ def init_database(db_path: Path) -> None:
             "venue": "TEXT",
             "openalex_id": "TEXT",
             "identifier": "TEXT",
+            "type": "TEXT",
         }
 
-        # Add missing columns using safe helper
+        # Add missing columns (check against ORIGINAL state)
         for col_name, col_type in columns_to_add.items():
-            if col_name not in existing_columns:
+            if col_name not in original_columns:
                 _safe_add_column(conn, col_name, col_type)
 
-        # Migration: Add identifier column and migrate from doi
-        if "doi" in existing_columns and "identifier" not in existing_columns:
-            # Step 1: Add identifier column as nullable first
-            _safe_add_column(conn, "identifier", "TEXT")
+        # Migration: Migrate doi -> identifier (only if doi EXISTS in original)
+        if "doi" in original_columns:
+            # If identifier wasn't in original, it was added above - now migrate data
+            if "identifier" not in original_columns:
+                # Migrate existing doi data to identifier (format: doi:xxxxx)
+                conn.execute("""
+                    UPDATE papers
+                    SET identifier = 'doi:' || doi
+                    WHERE doi IS NOT NULL AND doi != ''
+                """)
 
-            # Step 2: Migrate existing doi data to identifier (format: doi:xxxxx)
-            conn.execute("""
-                UPDATE papers
-                SET identifier = 'doi:' || doi
-                WHERE doi IS NOT NULL AND doi != ''
-            """)
-
-            # Step 3: Create identifier index and drop doi index
+            # Drop doi column (must drop index first due to UNIQUE constraint)
             conn.execute("DROP INDEX IF EXISTS idx_papers_doi")
-            conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_identifier ON papers(identifier COLLATE NOCASE)"
-            )
-
-            # Step 4: Drop doi column after migration
             conn.execute("ALTER TABLE papers DROP COLUMN doi")
 
         conn.execute(
