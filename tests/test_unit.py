@@ -405,7 +405,7 @@ class TestCLICommands:
 
         # Patch ingest_paper to return a successful result
         mock_result = {
-            "doi": "10.1234/test",
+            "identifier": "doi:10.1234/test",
             "title": "Test Research Paper",
             "type": "article",
         }
@@ -418,7 +418,7 @@ class TestCLICommands:
         )
 
         assert result.exit_code == 0
-        assert "Ingesting DOI: 10.1234/test" in result.output
+        assert "Ingesting: 10.1234/test" in result.output
         assert "Successfully ingested: Test Research Paper" in result.output
 
     def test_ingest_command_failure(self, tmp_path, monkeypatch):
@@ -433,14 +433,16 @@ class TestCLICommands:
         monkeypatch.setattr(raven.main, "_resolve_db_path", mock_resolve_db_path)
 
         # Patch ingest_paper to return None (failure case)
-        monkeypatch.setattr(raven.ingestion, "ingest_paper", lambda db, doi: None)
+        monkeypatch.setattr(
+            raven.ingestion, "ingest_paper", lambda db, identifier: None
+        )
 
         result = runner.invoke(
             raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
         )
 
         assert result.exit_code == 0
-        assert "Ingesting DOI: 10.9999/failure" in result.output
+        assert "Ingesting: 10.9999/failure" in result.output
         assert "Failed to ingest publication" in result.output
 
 
@@ -522,7 +524,11 @@ class TestIngestionModule:
 
     def test_doi_cleaning_doi_prefix(self, tmp_path, requests_mock, monkeypatch):
         """Test DOI cleaning removes doi: prefix."""
-        mock_response = {"title": "Test", "type": "article"}
+        mock_response = {
+            "title": "Test",
+            "type": "article",
+            "ids": {"doi": "https://doi.org/10.1234/prefix"},
+        }
 
         db_path = tmp_path / "test.db"
         init_database(db_path)
@@ -539,7 +545,7 @@ class TestIngestionModule:
         result = ingest_paper(db_path, "doi:10.1234/prefix")
 
         assert result is not None
-        assert result["doi"] == "10.1234/prefix"
+        assert result["identifier"] == "doi:10.1234/prefix"
 
 
 # =============================================================================
@@ -692,10 +698,9 @@ class TestIngestionRetryLogic:
 class TestOpenAlexSearch:
     """Tests for OpenAlex search functions."""
 
-    def test_default_filters_includes_oa_and_doi(self):
-        """DEFAULT_FILTERS includes is_oa and has_doi."""
+    def test_default_filters_includes_oa(self):
+        """DEFAULT_FILTERS includes is_oa."""
         assert "is_oa:true" in DEFAULT_FILTERS
-        assert "has_doi:true" in DEFAULT_FILTERS
 
     def test_semantic_filters_supports_semantic_search(self):
         """SEMANTIC_FILTERS uses is_oa which is supported in semantic search."""
@@ -707,7 +712,7 @@ class TestOpenAlexSearch:
     def test_format_search_result_basic(self):
         """format_search_result extracts key fields."""
         work = {
-            "doi": "10.1234/test",
+            "ids": {"doi": "10.1234/test"},
             "title": "Test Paper",
             "type": "article",
             "publication_year": 2023,
@@ -717,7 +722,7 @@ class TestOpenAlexSearch:
 
         result = format_search_result(work)
 
-        assert result["doi"] == "10.1234/test"
+        assert result["identifier"] == "doi:10.1234/test"
         assert result["title"] == "Test Paper"
         assert result["type"] == "article"
         assert result["publication_year"] == 2023
@@ -727,6 +732,7 @@ class TestOpenAlexSearch:
     def test_format_search_result_missing_fields(self):
         """format_search_result handles missing fields."""
         work = {
+            "ids": {},  # Empty ids - no identifier available
             "title": "Minimal Paper",
             # Missing doi, type, etc.
         }
@@ -734,7 +740,7 @@ class TestOpenAlexSearch:
         result = format_search_result(work)
 
         assert result["title"] == "Minimal Paper"
-        assert result["doi"] is None
+        assert result["identifier"] is None
         assert result["type"] == "article"  # Default
         assert result["cited_by_count"] == 0  # Default
 
@@ -969,7 +975,7 @@ class TestUndoInvertedIndex:
     def test_format_search_result_with_abstract(self):
         """format_search_result includes reconstructed abstract."""
         work = {
-            "doi": "10.1234/test",
+            "ids": {"doi": "10.1234/test"},
             "title": "Test Paper",
             "type": "article",
             "publication_year": 2023,
@@ -985,7 +991,7 @@ class TestUndoInvertedIndex:
         result = format_search_result(work)
 
         assert result["abstract"] == "This is abstract"
-        assert result["doi"] == "10.1234/test"
+        assert result["identifier"] == "doi:10.1234/test"
         assert result["publication_year"] == 2023
         assert result["type"] == "article"
         assert result["cited_by_count"] == 50
@@ -994,7 +1000,7 @@ class TestUndoInvertedIndex:
     def test_format_search_result_without_abstract(self):
         """format_search_result handles missing abstract_inverted_index."""
         work = {
-            "doi": "10.1234/test",
+            "ids": {"doi": "10.1234/test"},
             "title": "Test Paper",
             "type": "article",
             "publication_year": 2023,
@@ -1003,4 +1009,4 @@ class TestUndoInvertedIndex:
         result = format_search_result(work)
 
         assert result["abstract"] == ""
-        assert result["doi"] == "10.1234/test"
+        assert result["identifier"] == "doi:10.1234/test"

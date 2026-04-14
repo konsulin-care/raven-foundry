@@ -10,8 +10,14 @@ Responsibilities:
 - Convert PDF → Markdown (MarkItDown)
 - Clean extracted text
 
+Identifier Support:
+- DOI: 10.5281/zenodo.18201069, doi:10.5281/zenodo.18201069
+- OpenAlex ID: W7119934875, openalex:W7119934875
+- PMID: 29456894, pmid:29456894
+- MAG: 2741809807, mag:2741809807
+
 Rules:
-- Deduplicate using DOI before insertion
+- Deduplicate using identifier before insertion
 - Do not use LLMs in this module
 - Keep processing CPU-efficient
 - Ensure ingestion integrates cleanly with CLI workflow
@@ -31,14 +37,16 @@ from raven.embeddings import generate_embedding, generate_embeddings_batch
 from raven.storage import (
     add_embedding,
     add_paper,
+    extract_identifier,
     get_embedding_exists,
-    get_paper_id_by_doi,
+    get_paper_id_by_identifier,
     update_paper,
 )
 
 # Default filters for search results
-# Note: Semantic search has limited filter support (no has_doi), so we use separate filters
-DEFAULT_FILTERS = "is_oa:true,has_doi:true"  # For keyword search
+# Note: Semantic search has limited filter support, so we use separate filters
+# has_doi removed - we extract identifier from work['ids'] which includes DOI, OpenAlex, PMID, MAG
+DEFAULT_FILTERS = "is_oa:true"  # For keyword search
 SEMANTIC_FILTERS = "is_oa:true"  # For semantic search (limited to: is_oa, has_abstract, has_fulltext, etc.)
 
 # Default sort order for search results
@@ -78,6 +86,76 @@ def normalize_doi(doi: str) -> str:
     return doi
 
 
+def normalize_identifier(identifier: str) -> str:
+    """Detect and normalize identifier type for OpenAlex API.
+
+    Supported formats:
+    - DOI: 10.5281/zenodo.18201069, doi:10.5281/zenodo.18201069, https://doi.org/10.5281/zenodo.18201069
+    - OpenAlex: W7119934875, openalex:W7119934875, https://openalex.org/W7119934875
+    - PMID: 29456894, pmid:29456894, https://pubmed.ncbi.nlm.nih.gov/29456894
+    - MAG: 2741809807, mag:2741809807
+
+    Default to OpenAlex ID format if unrecognized.
+
+    Args:
+        identifier: Raw identifier string from user.
+
+    Returns:
+        Normalized identifier with explicit prefix for OpenAlex API.
+    """
+    id = identifier.strip()
+
+    # Already has explicit prefix
+    for prefix in ("doi:", "openalex:", "pmid:", "mag:"):
+        if id.lower().startswith(prefix):
+            return id.lower()
+
+    # DOI URL pattern (contains doi.org/)
+    if "doi.org/" in id.lower():
+        cleaned = (
+            id.lower().replace("https://doi.org/", "").replace("http://doi.org/", "")
+        )
+        return f"doi:{cleaned}"
+
+    # OpenAlex URL
+    if "openalex.org/" in id.lower():
+        cleaned = (
+            id.lower()
+            .replace("https://openalex.org/", "")
+            .replace("http://openalex.org/", "")
+        )
+        return f"openalex:{cleaned}"
+
+    # PubMed URL
+    if "pubmed.ncbi.nlm.nih.gov/" in id.lower():
+        cleaned = id.lower().replace("https://pubmed.ncbi.nlm.nih.gov/", "")
+        return f"pmid:{cleaned}"
+
+    # DOI pattern (contains /)
+    if "/" in id:
+        return f"doi:{id.lower()}"
+
+    # PMID (digits only, 7+ digits)
+    if id.isdigit() and len(id) >= 7:
+        return f"pmid:{id}"
+
+    # MAG (digits only)
+    if id.isdigit():
+        return f"mag:{id}"
+
+    # OpenAlex ID (starts with W followed by digits)
+    if id.upper().startswith("W") and len(id) > 1 and id[1:].isdigit():
+        return f"openalex:{id.upper()}"
+
+    # Default to OpenAlex ID (warn user to use explicit prefix)
+    logger.warning(
+        "Unrecognized identifier format '%s'. Treating as OpenAlex ID. "
+        "Use explicit prefix (doi:, openalex:, pmid:, mag:) for clarity.",
+        identifier,
+    )
+    return f"openalex:{id.upper()}"
+
+
 def combine_title_abstract(title: str, abstract: str | None) -> str:
     """Combine title and abstract for embedding generation.
 
@@ -93,8 +171,14 @@ def combine_title_abstract(title: str, abstract: str | None) -> str:
     return title
 
 
-def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
-    """Ingest a paper by DOI from OpenAlex with embedding generation.
+def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
+    """Ingest a paper by identifier from OpenAlex with embedding generation.
+
+    Supports multiple identifier types:
+    - DOI: 10.5281/zenodo.18201069, doi:10.5281/zenodo.18201069
+    - OpenAlex ID: W7119934875, openalex:W7119934875
+    - PMID: 29456894, pmid:29456894
+    - MAG: 2741809807, mag:2741809807
 
     Fetches paper metadata from OpenAlex, stores it in the database,
     generates a semantic embedding from title + abstract, and stores
@@ -102,20 +186,20 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
 
     Args:
         db_path: Path to the SQLite database file.
-        doi: DOI of the paper to ingest.
+        identifier: Identifier of the paper (DOI, OpenAlex ID, PMID, or MAG).
 
     Returns:
-        Dict with paper_id, doi, title, type, and embedding, or None on failure.
+        Dict with paper_id, identifier, title, type, and embedding, or None on failure.
     """
     # Get API configuration
     api_key = get_openalex_api_key()
     base_url = _get_openalex_base_url()
 
-    # Clean DOI
-    doi = normalize_doi(doi)
+    # Normalize identifier (detects type automatically)
+    identifier = normalize_identifier(identifier)
 
-    # Query OpenAlex API (requires doi: prefix)
-    url = f"{base_url}/works/doi:{doi}?api_key={api_key}"
+    # Query OpenAlex API
+    url = f"{base_url}/works/{identifier}?api_key={api_key}"
 
     # Use session with retry logic
     session = _create_session_with_retries()
@@ -135,6 +219,9 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
         logger.error("Failed to parse response: %s", e)
         return None
 
+    # Extract identifier from work's ids (priority: doi > openalex > pmid > mag)
+    final_identifier = extract_identifier(data.get("ids"))
+
     # Extract metadata
     title = data.get("title", "Untitled")
     paper_type = data.get("type", "article")
@@ -150,28 +237,29 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
         or None
     )
 
-    # Idempotent ingestion: Check if DOI exists first
-    existing_id = get_paper_id_by_doi(db_path, doi)
+    # Idempotent ingestion: Check if identifier exists first
+    existing_id = get_paper_id_by_identifier(db_path, final_identifier)
 
     if existing_id is not None:
-        # DOI exists - check if embedding exists
+        # Identifier exists - check if embedding exists
         if get_embedding_exists(db_path, existing_id):
-            # DOI and embedding both exist - skip with info log
-            logger.warning(
-                "Paper with DOI %s already fully stored (paper + embedding)", doi
+            # Identifier and embedding both exist - skip with info log
+            logger.info(
+                "Paper with identifier %s already fully stored (paper + embedding)",
+                final_identifier,
             )
             return {
                 "paper_id": existing_id,
-                "doi": doi,
+                "identifier": final_identifier,
                 "title": title,
                 "type": paper_type,
                 "embedding": None,  # Not regenerated
             }
         else:
-            # DOI exists but no embedding - update metadata and regenerate embedding
-            logger.warning(
-                "Paper with DOI %s exists without embedding, updating and generating embedding",
-                doi,
+            # Identifier exists but no embedding - update metadata and regenerate embedding
+            logger.info(
+                "Paper with identifier %s exists without embedding, updating and generating embedding",
+                final_identifier,
             )
             update_paper(
                 db_path,
@@ -186,11 +274,11 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
             )
             paper_id = existing_id
     else:
-        # New DOI - add paper
-        logger.info("Adding new paper with DOI %s", doi)
+        # New identifier - add paper
+        logger.info("Adding new paper with identifier %s", final_identifier)
         paper_id = add_paper(
             db_path,
-            doi=doi,
+            identifier=final_identifier,
             title=title,
             authors=authors,
             abstract=abstract,
@@ -213,7 +301,7 @@ def ingest_paper(db_path: Path, doi: str) -> dict[str, Any] | None:
 
     return {
         "paper_id": paper_id,
-        "doi": doi,
+        "identifier": final_identifier,
         "title": title,
         "type": paper_type,
         "embedding": embedding,
@@ -487,7 +575,7 @@ def undo_inverted_index(inverted_index: dict[str, list[int]]) -> str:
 def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
     """Format OpenAlex work result for display/storage.
 
-    Includes: DOI, Year, Type, Citation, Open Access, Abstract, Embedding Text
+    Includes: Identifier, Year, Type, Citation, Open Access, Abstract, Embedding Text
     """
     # Reconstruct abstract from inverted index if available
     abstract = ""
@@ -498,8 +586,11 @@ def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
     # Get title for embedding text generation
     title = work.get("title", "Untitled")
 
+    # Extract identifier from work['ids'] using priority (doi > openalex > pmid > mag)
+    identifier = extract_identifier(work.get("ids"))
+
     return {
-        "doi": work.get("doi"),
+        "identifier": identifier,
         "title": title,
         "type": work.get("type", "article"),
         "publication_year": work.get("publication_year"),
@@ -512,18 +603,20 @@ def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _get_existing_paper_info(db_path: Path, doi: str) -> tuple[int | None, bool]:
-    """Check if DOI exists in database and whether it has an embedding.
+def _get_existing_paper_info(
+    db_path: Path, identifier: str | None
+) -> tuple[int | None, bool]:
+    """Check if identifier exists in database and whether it has an embedding.
 
     Args:
         db_path: Path to the SQLite database file.
-        doi: DOI to check for.
+        identifier: Identifier to check for.
 
     Returns:
         Tuple of (existing_paper_id, has_embedding). has_embedding is False
         if paper doesn't exist.
     """
-    existing_id = get_paper_id_by_doi(db_path, doi)
+    existing_id = get_paper_id_by_identifier(db_path, identifier)
     if existing_id is None:
         return None, False
     has_embedding = get_embedding_exists(db_path, existing_id)
@@ -532,16 +625,16 @@ def _get_existing_paper_info(db_path: Path, doi: str) -> tuple[int | None, bool]
 
 def _handle_existing_paper(
     db_path: Path,
-    doi: str,
+    identifier: str | None,
     paper_info: dict[str, Any],
     existing_id: int,
     has_embedding: bool,
 ) -> int | None:
-    """Handle case where DOI already exists in database.
+    """Handle case where identifier already exists in database.
 
     Args:
         db_path: Path to the SQLite database file.
-        doi: DOI of the paper.
+        identifier: Identifier of the paper.
         paper_info: Paper metadata dict.
         existing_id: Existing paper ID in database.
         has_embedding: Whether paper already has an embedding.
@@ -550,20 +643,20 @@ def _handle_existing_paper(
         paper_id if paper should be processed, None if fully stored (skip).
     """
     if has_embedding:
-        # DOI and embedding both exist - skip with info log
+        # Identifier and embedding both exist - skip with info log
         logger.info(
-            "Paper with DOI %s already fully stored (paper + embedding)",
-            doi,
+            "Paper with identifier %s already fully stored (paper + embedding)",
+            identifier,
         )
         return None
 
-    # DOI exists but no embedding - update metadata and regenerate
+    # Identifier exists but no embedding - update metadata and regenerate
     logger.info(
-        "Paper with DOI %s exists without embedding, updating and generating embedding",
-        doi,
+        "Paper with identifier %s exists without embedding, updating and generating embedding",
+        identifier,
     )
-    # Remove doi from paper_info before passing to update_paper
-    sanitized_paper_info = {k: v for k, v in paper_info.items() if k != "doi"}
+    # Remove identifier from paper_info before passing to update_paper
+    sanitized_paper_info = {k: v for k, v in paper_info.items() if k != "identifier"}
     update_paper(db_path, existing_id, **sanitized_paper_info)
     return existing_id
 
@@ -581,7 +674,7 @@ def _prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
     formatted = format_search_result(work)
 
     # Extract needed fields for storage
-    doi = formatted.get("doi")
+    identifier = formatted.get("identifier")
     title = formatted.get("title", "Untitled")
     abstract = formatted.get("abstract", "")
 
@@ -593,7 +686,7 @@ def _prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
     )
 
     paper_info = {
-        "doi": doi,
+        "identifier": identifier,
         "title": title,
         "authors": authors,
         "abstract": abstract,
@@ -619,7 +712,7 @@ def ingest_search_results(
         search_results: Dict with 'results' list from OpenAlex search API.
 
     Returns:
-        List of ingested paper dicts with paper_id, doi, title, type, embedding.
+        List of ingested paper dicts with paper_id, identifier, title, type, embedding.
     """
     results = search_results.get("results", [])
     if not results:
@@ -643,23 +736,23 @@ def ingest_search_results(
     # Store papers and embeddings
     ingested = []
     for i, (paper_info, _) in enumerate(papers_data):
-        doi = paper_info.get("doi")
+        identifier = paper_info.get("identifier")
         embedding = embeddings[i] if embeddings is not None else None
 
-        # Handle DOI-based deduplication
-        if doi:
-            existing_id, has_embedding = _get_existing_paper_info(db_path, doi)
+        # Handle identifier-based deduplication
+        if identifier:
+            existing_id, has_embedding = _get_existing_paper_info(db_path, identifier)
 
             if existing_id is not None:
                 paper_id = _handle_existing_paper(
-                    db_path, doi, paper_info, existing_id, has_embedding
+                    db_path, identifier, paper_info, existing_id, has_embedding
                 )
                 if paper_id is None:
                     # Already fully stored - add to results with None embedding
                     ingested.append(
                         {
                             "paper_id": existing_id,
-                            "doi": doi,
+                            "identifier": identifier,
                             "title": paper_info["title"],
                             "type": paper_info["paper_type"],
                             "embedding": None,
@@ -667,11 +760,11 @@ def ingest_search_results(
                     )
                     continue
             else:
-                # New DOI - add paper
-                logger.info("Adding new paper with DOI %s", doi)
+                # New identifier - add paper
+                logger.info("Adding new paper with identifier %s", identifier)
                 paper_id = add_paper(db_path, **paper_info)
         else:
-            # No DOI - add paper (will be deduplicated by other means if needed)
+            # No identifier - add paper (will be deduplicated by other means if needed)
             paper_id = add_paper(db_path, **paper_info)
 
         # Add embedding if available
@@ -684,7 +777,7 @@ def ingest_search_results(
         ingested.append(
             {
                 "paper_id": paper_id,
-                "doi": paper_info["doi"],
+                "identifier": paper_info["identifier"],
                 "title": paper_info["title"],
                 "type": paper_info["paper_type"],
                 "embedding": embedding,

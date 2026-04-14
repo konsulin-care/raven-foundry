@@ -41,6 +41,85 @@ class TestNormalizeDoi:
         assert normalize_doi("  10.1234/test  ") == "10.1234/test"
 
 
+class TestNormalizeIdentifier:
+    """Tests for normalize_identifier function."""
+
+    def test_doi_with_explicit_prefix(self):
+        """normalize_identifier handles explicit doi: prefix."""
+        from raven.ingestion import normalize_identifier
+
+        assert normalize_identifier("doi:10.1234/test") == "doi:10.1234/test"
+
+    def test_doi_without_prefix(self):
+        """normalize_identifier adds doi: prefix to bare DOI."""
+        from raven.ingestion import normalize_identifier
+
+        assert normalize_identifier("10.1234/test") == "doi:10.1234/test"
+
+    def test_doi_url(self):
+        """normalize_identifier handles DOI URL."""
+        from raven.ingestion import normalize_identifier
+
+        assert (
+            normalize_identifier("https://doi.org/10.1234/test") == "doi:10.1234/test"
+        )
+
+    def test_openalex_with_explicit_prefix(self):
+        """normalize_identifier handles explicit openalex: prefix."""
+        from raven.ingestion import normalize_identifier
+
+        assert normalize_identifier("openalex:W7119934875") == "openalex:w7119934875"
+
+    def test_openalex_bare_id(self):
+        """normalize_identifier handles bare OpenAlex ID."""
+        from raven.ingestion import normalize_identifier
+
+        assert normalize_identifier("W7119934875") == "openalex:W7119934875"
+
+    def test_openalex_url(self):
+        """normalize_identifier handles OpenAlex URL."""
+        from raven.ingestion import normalize_identifier
+
+        assert (
+            normalize_identifier("https://openalex.org/W7119934875")
+            == "openalex:w7119934875"
+        )
+
+    def test_pmid_with_explicit_prefix(self):
+        """normalize_identifier handles explicit pmid: prefix."""
+        from raven.ingestion import normalize_identifier
+
+        assert normalize_identifier("pmid:29456894") == "pmid:29456894"
+
+    def test_pmid_bare_id(self):
+        """normalize_identifier treats 7+ digits as PMID."""
+        from raven.ingestion import normalize_identifier
+
+        assert normalize_identifier("29456894") == "pmid:29456894"
+
+    def test_pmid_url(self):
+        """normalize_identifier handles PubMed URL."""
+        from raven.ingestion import normalize_identifier
+
+        assert (
+            normalize_identifier("https://pubmed.ncbi.nlm.nih.gov/29456894")
+            == "pmid:29456894"
+        )
+
+    def test_mag_with_prefix(self):
+        """normalize_identifier handles explicit mag: prefix."""
+        from raven.ingestion import normalize_identifier
+
+        assert normalize_identifier("mag:2741809807") == "mag:2741809807"
+
+    def test_short_digits_as_mag(self):
+        """normalize_identifier treats short digits (1-6) as MAG."""
+        from raven.ingestion import normalize_identifier
+
+        # 6 digits or less is treated as MAG (less common for PMID)
+        assert normalize_identifier("123456") == "mag:123456"
+
+
 class TestCombineTitleAbstract:
     """Tests for combine_title_abstract function."""
 
@@ -97,7 +176,7 @@ class TestFormatSearchResult:
     def test_format_search_result_basic(self):
         """Formats basic search result."""
         work = {
-            "doi": "10.1234/test",
+            "ids": {"doi": "https://doi.org/10.1234/test"},
             "title": "Test Paper",
             "type": "article",
             "publication_year": 2024,
@@ -108,7 +187,7 @@ class TestFormatSearchResult:
         }
         result = format_search_result(work)
 
-        assert result["doi"] == "10.1234/test"
+        assert result["identifier"] == "doi:10.1234/test"
         assert result["title"] == "Test Paper"
         assert result["type"] == "article"
         assert result["publication_year"] == 2024
@@ -136,6 +215,7 @@ class TestFormatSearchResult:
         assert result["type"] == "article"
         assert result["abstract"] == ""
         assert result["embedding_text"] == "Untitled"
+        assert result["identifier"] is None
 
 
 class TestIngestPaper:
@@ -146,14 +226,14 @@ class TestIngestPaper:
     @patch("raven.ingestion.update_paper")
     @patch("raven.ingestion.add_paper")
     @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion._create_session_with_retries")
     def test_ingest_paper_success(
         self,
         mock_session_cls,
         mock_api_key,
-        mock_get_paper_id_by_doi,
+        mock_get_paper_id_by_identifier,
         mock_get_embedding_exists,
         mock_add_paper,
         mock_update_paper,
@@ -163,13 +243,16 @@ class TestIngestPaper:
         """ingest_paper fetches paper, stores metadata and embedding."""
         # Setup mocks
         mock_api_key.return_value = "test-key"
-        mock_get_paper_id_by_doi.return_value = None  # New DOI - doesn't exist
+        mock_get_paper_id_by_identifier.return_value = (
+            None  # New identifier - doesn't exist
+        )
         mock_get_embedding_exists.return_value = False
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
+            "ids": {"doi": "https://doi.org/10.1234/test"},
             "title": "Test Paper",
             "type": "article",
             "publication_year": 2024,
@@ -189,12 +272,14 @@ class TestIngestPaper:
         # Verify
         assert result is not None
         assert result["paper_id"] == 42
-        assert result["doi"] == "10.1234/test"
+        assert result["identifier"] == "doi:10.1234/test"
         assert result["title"] == "Test Paper"
         assert result["type"] == "article"
         assert result["embedding"] == [0.1] * 384
 
-        mock_get_paper_id_by_doi.assert_called_once_with(db_path, "10.1234/test")
+        mock_get_paper_id_by_identifier.assert_called_once_with(
+            db_path, "doi:10.1234/test"
+        )
         mock_add_paper.assert_called_once()
         mock_generate_embedding.assert_called_once_with("Test Paper")
         mock_add_embedding.assert_called_once_with(db_path, 42, [0.1] * 384)
@@ -204,14 +289,14 @@ class TestIngestPaper:
     @patch("raven.ingestion.update_paper")
     @patch("raven.ingestion.add_paper")
     @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion._create_session_with_retries")
     def test_ingest_paper_api_error(
         self,
         mock_session_cls,
         mock_api_key,
-        mock_get_paper_id_by_doi,
+        mock_get_paper_id_by_identifier,
         mock_get_embedding_exists,
         mock_add_paper,
         mock_update_paper,
@@ -220,7 +305,7 @@ class TestIngestPaper:
     ):
         """ingest_paper returns None on API error."""
         mock_api_key.return_value = "test-key"
-        mock_get_paper_id_by_doi.return_value = None
+        mock_get_paper_id_by_identifier.return_value = None
         mock_get_embedding_exists.return_value = False
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
@@ -238,14 +323,14 @@ class TestIngestPaper:
     @patch("raven.ingestion.update_paper")
     @patch("raven.ingestion.add_paper")
     @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion._create_session_with_retries")
     def test_ingest_paper_network_error(
         self,
         mock_session_cls,
         mock_api_key,
-        mock_get_paper_id_by_doi,
+        mock_get_paper_id_by_identifier,
         mock_get_embedding_exists,
         mock_add_paper,
         mock_update_paper,
@@ -254,7 +339,7 @@ class TestIngestPaper:
     ):
         """ingest_paper returns None on network error."""
         mock_api_key.return_value = "test-key"
-        mock_get_paper_id_by_doi.return_value = None
+        mock_get_paper_id_by_identifier.return_value = None
         mock_get_embedding_exists.return_value = False
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
@@ -276,10 +361,10 @@ class TestIngestSearchResults:
     @patch("raven.ingestion.update_paper")
     @patch("raven.ingestion.add_paper")
     @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     def test_ingest_search_results_success(
         self,
-        mock_get_paper_id_by_doi,
+        mock_get_paper_id_by_identifier,
         mock_get_embedding_exists,
         mock_add_paper,
         mock_update_paper,
@@ -287,7 +372,7 @@ class TestIngestSearchResults:
         mock_add_embedding,
     ):
         """ingest_search_results batch processes papers."""
-        mock_get_paper_id_by_doi.return_value = None  # All new DOIs
+        mock_get_paper_id_by_identifier.return_value = None  # All new identifiers
         mock_get_embedding_exists.return_value = False
         mock_add_paper.side_effect = [1, 2, 3]
         mock_generate_batch.return_value = [
@@ -299,7 +384,7 @@ class TestIngestSearchResults:
         search_results = {
             "results": [
                 {
-                    "doi": "10.1234/one",
+                    "ids": {"doi": "https://doi.org/10.1234/one"},
                     "title": "Paper One",
                     "type": "article",
                     "publication_year": 2024,
@@ -308,7 +393,7 @@ class TestIngestSearchResults:
                     "id": "https://openalex.org/W1",
                 },
                 {
-                    "doi": "10.1234/two",
+                    "ids": {"doi": "https://doi.org/10.1234/two"},
                     "title": "Paper Two",
                     "type": "article",
                     "publication_year": 2023,
@@ -317,7 +402,7 @@ class TestIngestSearchResults:
                     "id": "https://openalex.org/W2",
                 },
                 {
-                    "doi": "10.1234/three",
+                    "ids": {"doi": "https://doi.org/10.1234/three"},
                     "title": "Paper Three",
                     "type": "article",
                     "publication_year": 2022,
@@ -333,11 +418,11 @@ class TestIngestSearchResults:
 
         assert len(results) == 3
         assert results[0]["paper_id"] == 1
-        assert results[0]["doi"] == "10.1234/one"
+        assert results[0]["identifier"] == "doi:10.1234/one"
         assert results[1]["paper_id"] == 2
         assert results[2]["paper_id"] == 3
 
-        assert mock_get_paper_id_by_doi.call_count == 3
+        assert mock_get_paper_id_by_identifier.call_count == 3
         mock_add_paper.assert_called()
         mock_generate_batch.assert_called_once()
         assert mock_add_embedding.call_count == 3
@@ -347,10 +432,10 @@ class TestIngestSearchResults:
     @patch("raven.ingestion.update_paper")
     @patch("raven.ingestion.add_paper")
     @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     def test_ingest_search_results_empty(
         self,
-        mock_get_paper_id_by_doi,
+        mock_get_paper_id_by_identifier,
         mock_get_embedding_exists,
         mock_add_paper,
         mock_update_paper,
@@ -364,14 +449,14 @@ class TestIngestSearchResults:
         results = ingest_search_results(db_path, search_results)
 
         assert results == []
-        mock_get_paper_id_by_doi.assert_not_called()
+        mock_get_paper_id_by_identifier.assert_not_called()
         mock_add_paper.assert_not_called()
         mock_generate_batch.assert_not_called()
 
     @patch("raven.ingestion.add_embedding")
     @patch("raven.ingestion.generate_embeddings_batch")
     @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     @patch("raven.ingestion.add_paper")
     def test_ingest_search_results_skips_duplicates(
         self,
@@ -381,7 +466,7 @@ class TestIngestSearchResults:
         mock_generate_batch,
         mock_add_embedding,
     ):
-        """ingest_search_results handles duplicate DOIs (updates embedding if available)."""
+        """ingest_search_results handles duplicate identifiers (updates embedding if available)."""
         # Existing paper with embedding exists - should skip
         mock_get_paper_id.return_value = 1  # Existing paper ID
         mock_get_embedding_exists.return_value = True  # Embedding exists
@@ -390,7 +475,7 @@ class TestIngestSearchResults:
         search_results = {
             "results": [
                 {
-                    "doi": "10.1234/duplicate",
+                    "ids": {"doi": "https://doi.org/10.1234/duplicate"},
                     "title": "Duplicate Paper",
                     "type": "article",
                     "publication_year": 2024,
@@ -406,7 +491,7 @@ class TestIngestSearchResults:
 
         # With embedding available, should skip (not add embedding again)
         assert len(results) == 1
-        assert results[0]["doi"] == "10.1234/duplicate"
+        assert results[0]["identifier"] == "doi:10.1234/duplicate"
         assert results[0]["paper_id"] == 1
         mock_add_embedding.assert_not_called()  # Should skip since embedding exists
 
@@ -414,50 +499,56 @@ class TestIngestSearchResults:
 class TestGetExistingPaperInfo:
     """Tests for _get_existing_paper_info helper."""
 
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_embedding_exists")
     def test_returns_none_when_paper_not_exists(
-        self, mock_get_embedding_exists, mock_get_paper_id_by_doi
+        self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
     ):
-        """Returns (None, False) when DOI doesn't exist."""
-        mock_get_paper_id_by_doi.return_value = None
+        """Returns (None, False) when identifier doesn't exist."""
+        mock_get_paper_id_by_identifier.return_value = None
 
         db_path = Path("/tmp/test.db")
-        existing_id, has_embedding = _get_existing_paper_info(db_path, "10.1234/new")
+        existing_id, has_embedding = _get_existing_paper_info(
+            db_path, "doi:10.1234/new"
+        )
 
         assert existing_id is None
         assert has_embedding is False
-        mock_get_paper_id_by_doi.assert_called_once_with(db_path, "10.1234/new")
+        mock_get_paper_id_by_identifier.assert_called_once_with(
+            db_path, "doi:10.1234/new"
+        )
         mock_get_embedding_exists.assert_not_called()
 
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_embedding_exists")
     def test_returns_id_and_false_when_no_embedding(
-        self, mock_get_embedding_exists, mock_get_paper_id_by_doi
+        self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
     ):
         """Returns (id, False) when paper exists but no embedding."""
-        mock_get_paper_id_by_doi.return_value = 42
+        mock_get_paper_id_by_identifier.return_value = 42
         mock_get_embedding_exists.return_value = False
 
         db_path = Path("/tmp/test.db")
-        existing_id, has_embedding = _get_existing_paper_info(db_path, "10.1234/exists")
+        existing_id, has_embedding = _get_existing_paper_info(
+            db_path, "doi:10.1234/exists"
+        )
 
         assert existing_id == 42
         assert has_embedding is False
         mock_get_embedding_exists.assert_called_once_with(db_path, 42)
 
-    @patch("raven.ingestion.get_paper_id_by_doi")
+    @patch("raven.ingestion.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_embedding_exists")
     def test_returns_id_and_true_when_has_embedding(
-        self, mock_get_embedding_exists, mock_get_paper_id_by_doi
+        self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
     ):
         """Returns (id, True) when paper has embedding."""
-        mock_get_paper_id_by_doi.return_value = 42
+        mock_get_paper_id_by_identifier.return_value = 42
         mock_get_embedding_exists.return_value = True
 
         db_path = Path("/tmp/test.db")
         existing_id, has_embedding = _get_existing_paper_info(
-            db_path, "10.1234/embedded"
+            db_path, "doi:10.1234/embedded"
         )
 
         assert existing_id == 42
@@ -472,10 +563,10 @@ class TestHandleExistingPaper:
     def test_returns_none_when_fully_stored(self, mock_logger, mock_update_paper):
         """Returns None when paper has embedding (already fully stored)."""
         db_path = Path("/tmp/test.db")
-        paper_info = {"title": "Test Paper", "doi": "10.1234/test"}
+        paper_info = {"title": "Test Paper", "identifier": "doi:10.1234/test"}
 
         result = _handle_existing_paper(
-            db_path, "10.1234/test", paper_info, existing_id=1, has_embedding=True
+            db_path, "doi:10.1234/test", paper_info, existing_id=1, has_embedding=True
         )
 
         assert result is None
@@ -489,26 +580,26 @@ class TestHandleExistingPaper:
     ):
         """Updates paper and returns ID when no embedding."""
         db_path = Path("/tmp/test.db")
-        paper_info = {"title": "Test Paper", "doi": "10.1234/test"}
+        paper_info = {"title": "Test Paper", "identifier": "doi:10.1234/test"}
 
         result = _handle_existing_paper(
-            db_path, "10.1234/test", paper_info, existing_id=42, has_embedding=False
+            db_path, "doi:10.1234/test", paper_info, existing_id=42, has_embedding=False
         )
 
         assert result == 42
         mock_update_paper.assert_called_once()
-        # Check doi was removed from paper_info
+        # Check identifier was removed from paper_info
         call_kwargs = mock_update_paper.call_args[1]
-        assert "doi" not in call_kwargs
+        assert "identifier" not in call_kwargs
 
 
 class TestPreparePaperInfo:
     """Tests for _prepare_paper_info helper."""
 
     def test_extracts_basic_fields(self):
-        """Extracts DOI, title, type from work."""
+        """Extracts identifier, title, type from work."""
         work = {
-            "doi": "10.1234/test",
+            "ids": {"doi": "https://doi.org/10.1234/test"},
             "title": "Test Paper",
             "type": "article",
             "publication_year": 2024,
@@ -519,7 +610,7 @@ class TestPreparePaperInfo:
 
         paper_info, embedding_text = _prepare_paper_info(work)
 
-        assert paper_info["doi"] == "10.1234/test"
+        assert paper_info["identifier"] == "doi:10.1234/test"
         assert paper_info["title"] == "Test Paper"
         assert paper_info["paper_type"] == "article"
         assert paper_info["publication_year"] == 2024
@@ -529,6 +620,7 @@ class TestPreparePaperInfo:
     def test_extracts_authors(self):
         """Extracts authors from authorship data."""
         work = {
+            "ids": {"doi": "https://doi.org/10.1234/test"},
             "title": "Test Paper",
             "authorships": [
                 {"author": {"display_name": "John Doe"}},
@@ -543,6 +635,7 @@ class TestPreparePaperInfo:
     def test_extracts_venue(self):
         """Extracts venue from host_venue."""
         work = {
+            "ids": {"doi": "https://doi.org/10.1234/test"},
             "title": "Test Paper",
             "host_venue": {"display_name": "Test Journal"},
         }
@@ -551,13 +644,30 @@ class TestPreparePaperInfo:
 
         assert paper_info["venue"] == "Test Journal"
 
+    def test_extracts_openalex_id_fallback(self):
+        """Falls back to openalex ID when no DOI available."""
+        work = {
+            "ids": {"openalex": "https://openalex.org/W123456"},
+            "title": "Test Paper",
+            "type": "article",
+            "publication_year": 2024,
+            "authorships": [],
+            "host_venue": {},
+            "id": "https://openalex.org/W123456",
+        }
+
+        paper_info, embedding_text = _prepare_paper_info(work)
+
+        assert paper_info["identifier"] == "openalex:W123456"
+        assert paper_info["title"] == "Test Paper"
+
     def test_handles_missing_fields(self):
         """Handles missing fields gracefully."""
         work = {"title": "Test Paper"}
 
         paper_info, embedding_text = _prepare_paper_info(work)
 
-        assert paper_info["doi"] is None
+        assert paper_info["identifier"] is None
         assert paper_info["title"] == "Test Paper"
         assert paper_info["authors"] is None
         assert paper_info["abstract"] == ""

@@ -191,7 +191,7 @@ class TestStorageModuleRules:
                 add_paper(db_path, "10.1234/unique", "Duplicate", "article")
 
     def test_indexes_exist(self):
-        """STORAGE: Maintain indexes on DOI, type, title."""
+        """STORAGE: Maintain indexes on identifier, type, title."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
 
@@ -203,9 +203,11 @@ class TestStorageModuleRules:
                 )
                 indexes = [row[0] for row in cursor.fetchall()]
 
-            # Should have indexes on doi, type, title
+            # Should have indexes on identifier, type, title
             index_names = [i.lower() for i in indexes]
-            assert any("doi" in i for i in index_names), "Missing DOI index"
+            assert any("identifier" in i for i in index_names), (
+                "Missing identifier index"
+            )
             assert any("type" in i for i in index_names), "Missing type index"
             assert any("title" in i for i in index_names), "Missing title index"
 
@@ -233,4 +235,4 @@ class TestCLIWorkflow:
             results = search_papers(db_path, "workflow")
 
             assert len(results) == 1
-            assert results[0]["doi"] == "10.1234/workflow"
+            assert results[0]["identifier"] == "10.1234/workflow"

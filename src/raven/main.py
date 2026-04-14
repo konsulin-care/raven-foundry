@@ -162,7 +162,7 @@ def _search_local(db_path: Path, query: str) -> None:
 
     for paper in results:
         click.echo(f"Title: {paper['title']}")
-        click.echo(f"DOI: {paper['doi']}")
+        click.echo(f"Identifier: {paper.get('identifier') or 'N/A'}")
         click.echo(f"Type: {paper['type']}")
         click.echo("---")
 
@@ -203,8 +203,11 @@ def _search_openalex(
     _display_results(results)
 
     click.echo("To ingest a paper, run:")
-    click.echo("  raven ingest <DOI>")
-    click.echo("Or use the interactive mode (coming soon).")
+    click.echo("  raven ingest <identifier>  # DOI, OpenAlex ID, PMID, or MAG")
+    click.echo("Examples:")
+    click.echo("  raven ingest 10.5281/zenodo.18201069")
+    click.echo("  raven ingest W7119934875")
+    click.echo("  raven ingest pmid:29456894")
 
 
 def _display_results(results: list) -> None:
@@ -219,7 +222,7 @@ def _display_results(results: list) -> None:
 def _print_formatted_result(index: int, formatted: dict) -> None:
     """Print a single formatted result."""
     click.echo(f"{index}. {formatted['title']}")
-    click.echo(f"   DOI: {formatted['doi'] or 'N/A'}")
+    click.echo(f"   Identifier: {formatted.get('identifier') or 'N/A'}")
     click.echo(f"   Year: {formatted.get('publication_year', 'N/A')}")
     click.echo(f"   Type: {formatted['type']}")
     click.echo(f"   Citations: {formatted.get('cited_by_count', 0)}")
@@ -240,7 +243,7 @@ def _print_abstract(formatted: dict) -> None:
 
 
 @cli.command()
-@click.argument("doi")
+@click.argument("identifier")
 @click.option(
     "--db",
     "-d",
@@ -257,9 +260,9 @@ def _print_abstract(formatted: dict) -> None:
 )
 @click.pass_context
 def ingest(
-    ctx: click.Context, doi: str, db: Optional[Path], env: Optional[Path]
+    ctx: click.Context, identifier: str, db: Optional[Path], env: Optional[Path]
 ) -> None:
-    """Ingest a publication by DOI."""
+    """Ingest a publication by identifier (DOI, OpenAlex ID, PMID, or MAG)."""
     from raven.ingestion import ingest_paper
 
     db_path = _resolve_db_path(env, db)
@@ -267,9 +270,9 @@ def ingest(
     if not db_path.parent.exists():
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    click.echo(f"Ingesting DOI: {doi}...")
+    click.echo(f"Ingesting: {identifier}...")
 
-    result = ingest_paper(db_path, doi)
+    result = ingest_paper(db_path, identifier)
 
     if result:
         click.echo(f"Successfully ingested: {result['title']}")
@@ -365,12 +368,12 @@ def info(ctx: click.Context, db: Optional[Path], env: Optional[Path]) -> None:
     db_path = _resolve_db_path(env, db)
     data_dir = _get_data_dir()
 
-    # Get total unique DOIs
+    # Get total unique identifiers
     total_papers = 0
     if db_path.exists():
         try:
             with sqlite3.connect(db_path) as conn:
-                cursor = conn.execute("SELECT COUNT(DISTINCT doi) FROM papers")
+                cursor = conn.execute("SELECT COUNT(DISTINCT identifier) FROM papers")
                 total_papers = cursor.fetchone()[0]
         except sqlite3.OperationalError:
             click.echo(

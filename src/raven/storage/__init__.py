@@ -12,6 +12,49 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def extract_identifier(ids: dict[str, str] | None) -> str | None:
+    """Extract identifier from OpenAlex work IDs using priority: doi > openalex > pmid > mag.
+
+    Args:
+        ids: Dictionary of OpenAlex work IDs with keys like 'doi', 'openalex', 'pmid', 'mag'.
+
+    Returns:
+        Formatted identifier string (e.g., 'doi:10.5281/zenodo.18201069') or None if no IDs available.
+    """
+    if ids is None:
+        return None
+
+    # Priority 1: DOI
+    doi = ids.get("doi")
+    if doi:
+        # Strip https://doi.org/ and add doi: prefix
+        doi_value = doi.replace("https://doi.org/", "").replace("http://doi.org/", "")
+        return f"doi:{doi_value}"
+
+    # Priority 2: OpenAlex
+    openalex = ids.get("openalex")
+    if openalex:
+        # Strip https://openalex.org/ and add openalex: prefix
+        openalex_value = openalex.replace("https://openalex.org/", "")
+        return f"openalex:{openalex_value}"
+
+    # Priority 3: PMID
+    pmid = ids.get("pmid")
+    if pmid:
+        # Strip URL and add pmid: prefix
+        pmid_value = pmid.replace("https://pubmed.ncbi.nlm.nih.gov/", "")
+        return f"pmid:{pmid_value}"
+
+    # Priority 4: MAG
+    mag = ids.get("mag")
+    if mag:
+        # Just add mag: prefix
+        return f"mag:{mag}"
+
+    # No IDs available
+    return None
+
+
 def _load_vector_extension(conn: sqlite3.Connection) -> None:
     """Load the sqliteai-vector extension.
 
@@ -67,7 +110,14 @@ def _safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> 
     """
     # Whitelist of valid column names for migration
     valid_column_names = frozenset(
-        {"authors", "abstract", "publication_year", "venue", "openalex_id"}
+        {
+            "authors",
+            "abstract",
+            "publication_year",
+            "venue",
+            "openalex_id",
+            "identifier",
+        }
     )
 
     # Validate against whitelist
@@ -94,7 +144,7 @@ def init_database(db_path: Path) -> None:
             CREATE TABLE IF NOT EXISTS papers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 openalex_id TEXT UNIQUE,
-                doi TEXT UNIQUE NOT NULL COLLATE NOCASE,
+                identifier TEXT UNIQUE NOT NULL COLLATE NOCASE,
                 title TEXT NOT NULL,
                 authors TEXT,
                 abstract TEXT,
@@ -115,6 +165,7 @@ def init_database(db_path: Path) -> None:
             "publication_year": "INTEGER",
             "venue": "TEXT",
             "openalex_id": "TEXT",
+            "identifier": "TEXT",
         }
 
         # Add missing columns using safe helper
@@ -122,11 +173,32 @@ def init_database(db_path: Path) -> None:
             if col_name not in existing_columns:
                 _safe_add_column(conn, col_name, col_type)
 
+        # Migration: Add identifier column and migrate from doi
+        if "doi" in existing_columns and "identifier" not in existing_columns:
+            # Step 1: Add identifier column as nullable first
+            _safe_add_column(conn, "identifier", "TEXT")
+
+            # Step 2: Migrate existing doi data to identifier (format: doi:xxxxx)
+            conn.execute("""
+                UPDATE papers
+                SET identifier = 'doi:' || doi
+                WHERE doi IS NOT NULL AND doi != ''
+            """)
+
+            # Step 3: Create identifier index and drop doi index
+            conn.execute("DROP INDEX IF EXISTS idx_papers_doi")
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_identifier ON papers(identifier COLLATE NOCASE)"
+            )
+
+            # Step 4: Drop doi column after migration
+            conn.execute("ALTER TABLE papers DROP COLUMN doi")
+
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_openalex_id ON papers(openalex_id)"
         )
         conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi COLLATE NOCASE)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_identifier ON papers(identifier COLLATE NOCASE)"
         )
 
         conn.execute("""
@@ -162,7 +234,7 @@ def init_database(db_path: Path) -> None:
 
 
 def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
-    """Search papers by title or DOI (case-insensitive).
+    """Search papers by title or identifier (case-insensitive).
 
     Args:
         db_path: Path to the SQLite database file.
@@ -176,9 +248,9 @@ def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
 
         cursor = conn.execute(
             """
-            SELECT id, doi, title, authors, abstract, publication_year, venue, type
+            SELECT id, identifier, title, authors, abstract, publication_year, venue, type
             FROM papers
-            WHERE LOWER(title) LIKE LOWER(?) OR LOWER(doi) LIKE LOWER(?)
+            WHERE LOWER(title) LIKE LOWER(?) OR LOWER(identifier) LIKE LOWER(?)
             LIMIT 50
         """,
             (f"%{query}%", f"%{query}%"),
@@ -189,12 +261,34 @@ def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
     return results
 
 
-def get_paper_id_by_doi(db_path: Path, doi: str | None) -> int | None:
-    """Get paper ID by DOI.
+def get_paper_id_by_identifier(db_path: Path, identifier: str | None) -> int | None:
+    """Get paper ID by identifier.
 
     Args:
         db_path: Path to the SQLite database file.
-        doi: DOI of the paper to look up.
+        identifier: Identifier of the paper to look up (e.g., 'doi:10.1234/abc').
+
+    Returns:
+        The paper ID if found, None if not found.
+    """
+    if identifier is None:
+        return None
+
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        cursor = conn.execute(
+            "SELECT id FROM papers WHERE LOWER(identifier) = LOWER(?)",
+            (identifier,),
+        )
+        row = cursor.fetchone()
+        return row[0] if row else None  # type: ignore[return-value]
+
+
+def get_paper_id_by_doi(db_path: Path, doi: str | None) -> int | None:
+    """Get paper ID by DOI (backward compatibility alias).
+
+    Args:
+        db_path: Path to the SQLite database file.
+        doi: DOI of the paper to look up (e.g., '10.1234/abc' or 'doi:10.1234/abc').
 
     Returns:
         The paper ID if found, None if not found.
@@ -202,13 +296,9 @@ def get_paper_id_by_doi(db_path: Path, doi: str | None) -> int | None:
     if doi is None:
         return None
 
-    with contextlib.closing(sqlite3.connect(db_path)) as conn:
-        cursor = conn.execute(
-            "SELECT id FROM papers WHERE LOWER(doi) = LOWER(?)",
-            (doi,),
-        )
-        row = cursor.fetchone()
-        return row[0] if row else None  # type: ignore[return-value]
+    # Strip doi: prefix if present to get actual identifier
+    identifier = doi.replace("doi:", "") if doi.startswith("doi:") else doi
+    return get_paper_id_by_identifier(db_path, f"doi:{identifier}")
 
 
 def get_embedding_exists(db_path: Path, paper_id: int) -> bool:
@@ -231,7 +321,7 @@ def get_embedding_exists(db_path: Path, paper_id: int) -> bool:
 
 def add_paper(
     db_path: Path,
-    doi: str | None,
+    identifier: str | None,
     title: str,
     paper_type: str = "article",
     authors: str | None = None,
@@ -244,7 +334,7 @@ def add_paper(
 
     Args:
         db_path: Path to the SQLite database file.
-        doi: DOI of the paper (optional, will be coerced to empty string if None).
+        identifier: Identifier of the paper (e.g., 'doi:10.1234/abc', 'openalex:W12345').
         title: Title of the paper.
         paper_type: Type of paper (default: 'article').
         authors: Comma-separated list of authors (optional).
@@ -257,19 +347,19 @@ def add_paper(
         The ID of the newly inserted paper.
 
     Raises:
-        ValueError: If a paper with the same DOI already exists.
+        ValueError: If a paper with the same identifier already exists.
     """
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         try:
-            # Coerce None to empty string for doi field (NOT NULL constraint)
-            doi_value = doi if doi is not None else ""
+            # Coerce None to empty string for identifier field (NOT NULL constraint)
+            identifier_value = identifier if identifier is not None else ""
             cursor = conn.execute(
                 """
-                INSERT INTO papers (doi, title, authors, abstract, publication_year, venue, openalex_id, type)
+                INSERT INTO papers (identifier, title, authors, abstract, publication_year, venue, openalex_id, type)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
-                    doi_value,
+                    identifier_value,
                     title,
                     authors,
                     abstract,
@@ -283,9 +373,12 @@ def add_paper(
             return cursor.lastrowid  # type: ignore[return-value]
         except sqlite3.IntegrityError as e:
             error_msg = str(e)
-            # Check if it's specifically a DOI uniqueness constraint violation
-            if "UNIQUE constraint failed" in error_msg and "doi" in error_msg.lower():
-                raise ValueError(f"Paper with DOI {doi} already exists")
+            # Check if it's specifically an identifier uniqueness constraint violation
+            if (
+                "UNIQUE constraint failed" in error_msg
+                and "identifier" in error_msg.lower()
+            ):
+                raise ValueError(f"Paper with identifier {identifier} already exists")
             # Re-raise unrelated integrity errors
             raise
 
@@ -417,7 +510,7 @@ def search_by_embedding(
             """
             SELECT
                 p.id,
-                p.doi,
+                p.identifier,
                 p.title,
                 p.authors,
                 p.abstract,

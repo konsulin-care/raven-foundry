@@ -11,7 +11,9 @@ from raven.storage import (
     _safe_add_column,
     add_embedding,
     add_paper,
+    extract_identifier,
     get_paper_id_by_doi,
+    get_paper_id_by_identifier,
     init_database,
     search_by_embedding,
     search_papers,
@@ -141,7 +143,7 @@ class TestInitDatabase:
 
         expected_columns = {
             "id",
-            "doi",
+            "identifier",
             "title",
             "authors",
             "abstract",
@@ -173,7 +175,7 @@ class TestDatabaseWithFixture:
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     openalex_id TEXT UNIQUE,
-                    doi TEXT COLLATE NOCASE,
+                    identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
@@ -183,7 +185,9 @@ class TestDatabaseWithFixture:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_papers_identifier ON papers(identifier)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_type ON papers(type)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title)")
             conn.execute(
@@ -208,7 +212,7 @@ class TestDatabaseWithFixture:
 
         expected = {
             "id",
-            "doi",
+            "identifier",
             "title",
             "authors",
             "abstract",
@@ -227,7 +231,7 @@ class TestDatabaseWithFixture:
             indexes = {row[0] for row in cursor.fetchall()}
 
         expected = {
-            "idx_papers_doi",
+            "idx_papers_identifier",
             "idx_papers_type",
             "idx_papers_title",
             "idx_papers_year",
@@ -248,7 +252,7 @@ class TestAddPaperWithFixture:
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     openalex_id TEXT UNIQUE,
-                    doi TEXT COLLATE NOCASE UNIQUE,
+                    identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
@@ -258,7 +262,9 @@ class TestAddPaperWithFixture:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi)")
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_identifier ON papers(identifier COLLATE NOCASE)"
+            )
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS embeddings (
                     paper_id INTEGER PRIMARY KEY,
@@ -272,7 +278,7 @@ class TestAddPaperWithFixture:
         """add_paper returns the ID of the newly inserted paper."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
             authors="John Doe",
             publication_year=2024,
@@ -285,27 +291,27 @@ class TestAddPaperWithFixture:
         """add_paper works with only required fields."""
         paper_id = add_paper(
             db_path=db_path,
-            doi=None,
+            identifier=None,
             title="Minimal Test Paper",
         )
 
         assert isinstance(paper_id, int)
         assert paper_id > 0
 
-    def test_add_paper_duplicate_doi_raises(self, db_path):
-        """add_paper raises ValueError for duplicate DOI."""
+    def test_add_paper_duplicate_identifier_raises(self, db_path):
+        """add_paper raises ValueError for duplicate identifier."""
         # Add first paper
         add_paper(
             db_path=db_path,
-            doi="10.1234/duplicate",
+            identifier="doi:10.1234/duplicate",
             title="Original Paper",
         )
 
-        # Try to add duplicate - DOI has UNIQUE constraint
+        # Try to add duplicate - identifier has UNIQUE constraint
         with pytest.raises((ValueError, sqlite3.IntegrityError)):
             add_paper(
                 db_path=db_path,
-                doi="10.1234/duplicate",
+                identifier="doi:10.1234/duplicate",
                 title="Duplicate Paper",
             )
 
@@ -313,7 +319,7 @@ class TestAddPaperWithFixture:
         """add_paper correctly stores all provided fields."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/full",
+            identifier="doi:10.1234/full",
             title="Full Test Paper",
             authors="John Doe, Jane Smith",
             abstract="Test abstract",
@@ -328,7 +334,7 @@ class TestAddPaperWithFixture:
             cursor = conn.execute("SELECT * FROM papers WHERE id = ?", (paper_id,))
             row = dict(cursor.fetchone())
 
-        assert row["doi"] == "10.1234/full"
+        assert row["identifier"] == "doi:10.1234/full"
         assert row["title"] == "Full Test Paper"
         assert row["authors"] == "John Doe, Jane Smith"
         assert row["abstract"] == "Test abstract"
@@ -351,7 +357,7 @@ class TestSearchPapersWithFixture:
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     openalex_id TEXT UNIQUE,
-                    doi TEXT COLLATE NOCASE,
+                    identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
@@ -361,7 +367,9 @@ class TestSearchPapersWithFixture:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_papers_identifier ON papers(identifier)"
+            )
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS embeddings (
                     paper_id INTEGER PRIMARY KEY,
@@ -375,7 +383,7 @@ class TestSearchPapersWithFixture:
         """search_papers finds papers by title."""
         add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Machine Learning Advances",
         )
 
@@ -384,18 +392,18 @@ class TestSearchPapersWithFixture:
         assert len(results) == 1
         assert results[0]["title"] == "Machine Learning Advances"
 
-    def test_search_papers_by_doi(self, db_path):
-        """search_papers finds papers by DOI."""
+    def test_search_papers_by_identifier(self, db_path):
+        """search_papers finds papers by identifier."""
         add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
         )
 
         results = search_papers(db_path, "10.1234")
 
         assert len(results) == 1
-        assert results[0]["doi"] == "10.1234/test"
+        assert results[0]["identifier"] == "doi:10.1234/test"
 
     def test_search_papers_no_results(self, db_path):
         """search_papers returns empty list when no matches."""
@@ -404,8 +412,8 @@ class TestSearchPapersWithFixture:
         assert results == []
 
 
-class TestGetPaperIdByDoi:
-    """Tests for get_paper_id_by_doi function."""
+class TestGetPaperIdByIdentifier:
+    """Tests for get_paper_id_by_identifier function."""
 
     @pytest.fixture
     def db_path(self, tmp_path):
@@ -417,7 +425,7 @@ class TestGetPaperIdByDoi:
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     openalex_id TEXT UNIQUE,
-                    doi TEXT UNIQUE NOT NULL COLLATE NOCASE,
+                    identifier TEXT NOT NULL COLLATE NOCASE,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
@@ -429,36 +437,46 @@ class TestGetPaperIdByDoi:
             """)
         return db_path
 
-    def test_get_paper_id_by_doi_returns_id(self, db_path):
-        """get_paper_id_by_doi returns correct paper ID."""
+    def test_get_paper_id_by_identifier_returns_id(self, db_path):
+        """get_paper_id_by_identifier returns correct paper ID."""
         # Add a paper first
-        paper_id = add_paper(db_path, doi="10.1234/test", title="Test Paper")
+        paper_id = add_paper(db_path, identifier="doi:10.1234/test", title="Test Paper")
 
-        # Lookup by DOI
-        result = get_paper_id_by_doi(db_path, "10.1234/test")
+        # Lookup by identifier
+        result = get_paper_id_by_identifier(db_path, "doi:10.1234/test")
 
         assert result == paper_id
 
-    def test_get_paper_id_by_doi_case_insensitive(self, db_path):
-        """get_paper_id_by_doi is case-insensitive."""
-        add_paper(db_path, doi="10.1234/Test", title="Test Paper")
+    def test_get_paper_id_by_identifier_case_insensitive(self, db_path):
+        """get_paper_id_by_identifier is case-insensitive."""
+        add_paper(db_path, identifier="doi:10.1234/Test", title="Test Paper")
 
         # Lookup with different case
-        result = get_paper_id_by_doi(db_path, "10.1234/test")
+        result = get_paper_id_by_identifier(db_path, "doi:10.1234/test")
 
         assert result is not None
 
-    def test_get_paper_id_by_doi_not_found(self, db_path):
-        """get_paper_id_by_doi returns None for non-existent DOI."""
-        result = get_paper_id_by_doi(db_path, "10.1234/nonexistent")
+    def test_get_paper_id_by_identifier_not_found(self, db_path):
+        """get_paper_id_by_identifier returns None for non-existent identifier."""
+        result = get_paper_id_by_identifier(db_path, "doi:10.1234/nonexistent")
 
         assert result is None
 
-    def test_get_paper_id_by_doi_none_input(self, db_path):
-        """get_paper_id_by_doi returns None for None input."""
-        result = get_paper_id_by_doi(db_path, None)
+    def test_get_paper_id_by_identifier_none_input(self, db_path):
+        """get_paper_id_by_identifier returns None for None input."""
+        result = get_paper_id_by_identifier(db_path, None)
 
         assert result is None
+
+    def test_get_paper_id_by_doi_backward_compatible(self, db_path):
+        """get_paper_id_by_doi still works for backward compatibility."""
+        # Add a paper first
+        paper_id = add_paper(db_path, identifier="doi:10.1234/test", title="Test Paper")
+
+        # Lookup by DOI using backward compatible function
+        result = get_paper_id_by_doi(db_path, "10.1234/test")
+
+        assert result == paper_id
 
 
 class TestAddEmbeddingWithFixture:
@@ -474,7 +492,7 @@ class TestAddEmbeddingWithFixture:
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     openalex_id TEXT UNIQUE,
-                    doi TEXT,
+                    identifier TEXT,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
@@ -497,7 +515,7 @@ class TestAddEmbeddingWithFixture:
         """add_embedding adds embedding for valid paper_id."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
         )
 
@@ -510,7 +528,7 @@ class TestAddEmbeddingWithFixture:
         """add_embedding raises ValueError for wrong dimension."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
         )
 
@@ -524,7 +542,7 @@ class TestAddEmbeddingWithFixture:
         """add_embedding raises for 383-dimensional vector."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
         )
 
@@ -537,7 +555,7 @@ class TestAddEmbeddingWithFixture:
         """add_embedding raises for 385-dimensional vector."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
         )
 
@@ -563,7 +581,7 @@ class TestSearchByEmbeddingDimension:
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     openalex_id TEXT UNIQUE,
-                    doi TEXT COLLATE NOCASE,
+                    identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
@@ -621,7 +639,7 @@ class TestSearchByEmbeddingWithFixture:
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     openalex_id TEXT UNIQUE,
-                    doi TEXT COLLATE NOCASE,
+                    identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
@@ -644,7 +662,7 @@ class TestSearchByEmbeddingWithFixture:
         """search_by_embedding returns a list or skips if vec0 unavailable."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
         )
 
@@ -674,7 +692,7 @@ class TestSearchByEmbeddingWithFixture:
         """search_by_embedding result contains expected fields."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
         )
 
@@ -716,7 +734,7 @@ class TestIntegrationWithFixture:
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     openalex_id TEXT UNIQUE,
-                    doi TEXT COLLATE NOCASE,
+                    identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
@@ -726,7 +744,9 @@ class TestIntegrationWithFixture:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_papers_identifier ON papers(identifier)"
+            )
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS embeddings (
                     paper_id INTEGER PRIMARY KEY,
@@ -740,7 +760,7 @@ class TestIntegrationWithFixture:
         """Add paper and retrieve it."""
         paper_id = add_paper(
             db_path=db_path,
-            doi="10.1234/test",
+            identifier="doi:10.1234/test",
             title="Test Paper",
             authors="Test Author",
             publication_year=2024,
@@ -752,12 +772,12 @@ class TestIntegrationWithFixture:
         assert results[0]["id"] == paper_id
 
     def test_add_multiple_papers(self, db_path):
-        """Add multiple papers with different DOIs."""
+        """Add multiple papers with different identifiers."""
         paper_ids = []
         for i in range(3):
             pid = add_paper(
                 db_path=db_path,
-                doi=f"10.1234/test{i}",
+                identifier=f"doi:10.1234/test{i}",
                 title=f"Paper {i}",
             )
             paper_ids.append(pid)
@@ -770,3 +790,73 @@ class TestIntegrationWithFixture:
         results = search_papers(db_path, "anything")
 
         assert results == []
+
+
+class TestExtractIdentifier:
+    """Tests for extract_identifier helper function."""
+
+    def test_extract_identifier_doi_priority(self):
+        """extract_identifier returns doi: prefix when doi exists."""
+        ids = {
+            "openalex": "https://openalex.org/W2741809807",
+            "doi": "https://doi.org/10.5281/zenodo.18201069",
+            "mag": "2741809807",
+            "pmid": "https://pubmed.ncbi.nlm.nih.gov/29456894",
+        }
+
+        result = extract_identifier(ids)
+
+        assert result == "doi:10.5281/zenodo.18201069"
+
+    def test_extract_identifier_openalex_fallback(self):
+        """extract_identifier returns openalex: prefix when no doi but openalex exists."""
+        ids = {
+            "openalex": "https://openalex.org/W2741809807",
+            "mag": "2741809807",
+            "pmid": "https://pubmed.ncbi.nlm.nih.gov/29456894",
+        }
+
+        result = extract_identifier(ids)
+
+        assert result == "openalex:W2741809807"
+
+    def test_extract_identifier_pmid_fallback(self):
+        """extract_identifier returns pmid: prefix when no doi/openalex but pmid exists."""
+        ids = {
+            "mag": "2741809807",
+            "pmid": "https://pubmed.ncbi.nlm.nih.gov/29456894",
+        }
+
+        result = extract_identifier(ids)
+
+        assert result == "pmid:29456894"
+
+    def test_extract_identifier_mag_fallback(self):
+        """extract_identifier returns mag: prefix when no doi/openalex/pmid but mag exists."""
+        ids = {"mag": "2741809807"}
+
+        result = extract_identifier(ids)
+
+        assert result == "mag:2741809807"
+
+    def test_extract_identifier_no_ids(self):
+        """extract_identifier returns None when no IDs available."""
+        ids = {}
+
+        result = extract_identifier(ids)
+
+        assert result is None
+
+    def test_extract_identifier_none_input(self):
+        """extract_identifier returns None for None input."""
+        result = extract_identifier(None)
+
+        assert result is None
+
+    def test_extract_identifier_doi_http_variant(self):
+        """extract_identifier handles http://doi.org/ variant."""
+        ids = {"doi": "http://doi.org/10.1234/test"}
+
+        result = extract_identifier(ids)
+
+        assert result == "doi:10.1234/test"
