@@ -346,7 +346,7 @@ def search_works(
 
 def search_works_keyword(
     query: str,
-    filter: str | None = None,
+    filter_str: str | None = None,
     page: int = 1,
     per_page: int = 50,
     sort: str = "relevance_score:desc",
@@ -355,7 +355,7 @@ def search_works_keyword(
 
     Args:
         query: Search query string
-        filter: Additional OpenAlex filters
+        filter_str: Additional OpenAlex filters
         page: Page number
         per_page: Results per page (max 100)
         sort: Sort order
@@ -367,8 +367,8 @@ def search_works_keyword(
     base_url = _get_openalex_base_url()
 
     filters = [DEFAULT_FILTERS]
-    if filter:
-        filters.append(filter)
+    if filter_str:
+        filters.append(filter_str)
     combined_filter = ",".join(filters)
 
     session = _create_session_with_retries()

@@ -80,6 +80,7 @@ def cli(ctx: click.Context) -> None:
 @click.option(
     "--filter",
     "-f",
+    "filter_str",
     default=None,
     help="Additional OpenAlex filters (e.g., publication_year:>2020,type:article)",
 )
@@ -119,7 +120,7 @@ def search(
     query: str,
     db: Optional[Path],
     env: Optional[Path],
-    filter: Optional[str],
+    filter_str: Optional[str],
     page: int,
     per_page: int,
     sort: str,
@@ -163,7 +164,7 @@ def search(
 
         result_data = search_works(
             query=query,
-            filter=filter,
+            filter=filter_str,
             page=page,
             per_page=per_page,
             sort=sort,
