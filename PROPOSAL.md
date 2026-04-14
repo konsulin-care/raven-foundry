@@ -23,7 +23,7 @@ raven --query "dna methylation in depression"
 ### Database
 
 * SQLite (primary storage)
-* sqlite-vector extension (vector similarity search)
+* sqliteai-vector extension (vector similarity search)
 
 ### Embeddings
 
@@ -168,7 +168,7 @@ Raven uses distributed `AGENTS.md` files to guide AI-assisted development while 
 ### Step 3: Storage Layer
 
 * Define SQLite schema
-* Enable sqlite-vector
+* Enable sqliteai-vector
 * Implement insert/query abstraction
 
 ### Step 4: Embedding Pipeline

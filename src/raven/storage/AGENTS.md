@@ -1,7 +1,7 @@
 Manages SQLite database and vector storage.
 
 Stack:
-- SQLite + sqlite-vector
+- SQLite + sqliteai-vector
 
 Data:
 - 384-dim embeddings

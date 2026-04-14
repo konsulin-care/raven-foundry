@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Initialize SQLite database with sqlite-vector extension for vector storage.
+Initialize SQLite database with sqliteai-vector extension for vector storage.
 
 Usage:
     python scripts/init_db.py
@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 def get_vec_version(db: sqlite3.Connection) -> str | None:
-    """Get sqlite-vector extension version."""
+    """Get sqliteai-vector extension version."""
     try:
         result = db.execute("SELECT vec_version()").fetchone()
         return result[0] if result else None
@@ -45,7 +45,7 @@ def init_papers_table(db: sqlite3.Connection) -> None:
 
 
 def init_embeddings_table(db: sqlite3.Connection) -> None:
-    """Create vector embeddings table using sqlite-vector."""
+    """Create vector embeddings table using sqliteai-vector."""
     db.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
             paper_id INTEGER PRIMARY KEY,
@@ -95,7 +95,7 @@ def main() -> int:
     db = sqlite3.connect(db_path)
 
     try:
-        # Enable and load sqlite-vector extension
+        # Enable and load sqliteai-vector extension
         db.enable_load_extension(True)
 
         try:

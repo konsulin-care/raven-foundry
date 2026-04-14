@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def _load_vector_extension(conn: sqlite3.Connection) -> None:
-    """Load the sqlite-vector extension.
+    """Load the sqliteai-vector extension.
 
     Args:
         conn: SQLite connection to load the extension into.
@@ -26,7 +26,7 @@ def _load_vector_extension(conn: sqlite3.Connection) -> None:
     try:
         conn.load_extension(str(ext_path))
     except Exception as e:
-        raise RuntimeError(f"Failed to load sqlite-vector extension: {e}") from e
+        raise RuntimeError(f"Failed to load sqliteai-vector extension: {e}") from e
     finally:
         conn.enable_load_extension(False)
 
@@ -58,7 +58,7 @@ def init_database(db_path: Path) -> None:
         db_path: Path to the SQLite database file.
     """
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
-        # Enable and load sqlite-vector extension
+        # Enable and load sqliteai-vector extension
         _load_vector_extension(conn)
 
         conn.execute("PRAGMA journal_mode=WAL")
@@ -113,7 +113,7 @@ def init_database(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(publication_year)
         """)
 
-        # Create vector embeddings table using sqlite-vector (sqliteai-vector package)
+        # Create vector embeddings table using sqliteai-vector (sqliteai-vector package)
         # Uses regular table with BLOB column + vector_init()
         try:
             conn.execute("""
@@ -331,7 +331,7 @@ def add_embedding(db_path: Path, paper_id: int, embedding: list[float]) -> None:
         )
 
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
-        # Load sqlite-vector extension
+        # Load sqliteai-vector extension
         _load_vector_extension(conn)
 
         # Initialize vector column (required for each new connection)
@@ -372,7 +372,7 @@ def search_by_embedding(
         )
 
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
-        # Load sqlite-vector extension
+        # Load sqliteai-vector extension
         _load_vector_extension(conn)
 
         # Initialize vector column (required for each new connection)

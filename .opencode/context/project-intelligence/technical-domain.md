@@ -14,7 +14,7 @@
 |-------|-----------|---------|-----------|
 | Language | Python | 3.11+ | Type hints, modern async support |
 | CLI Framework | Click | 8.0+ | Simple command-line interface |
-| Database | SQLite + sqlite-vector | 3.x | Local-first, vector similarity search |
+| Database | SQLite + sqliteai-vector | 3.x | Local-first, vector similarity search |
 | LLM | Groq API | - | Fast inference, rate-limited |
 | HTTP Client | Requests | 2.x | Simple API integration |
 | Testing | pytest | - | Unit tests with mocks |

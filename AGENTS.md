@@ -5,7 +5,7 @@ Entry point: raven.main:main
 
 Stack:
 - Python CLI application
-- SQLite + sqlite-vector for local storage
+- SQLite + sqliteai-vector for local storage
 - OpenAlex API for scientific metadata
 - Groq LLM for reasoning tasks (rate-limited + cached)
 
