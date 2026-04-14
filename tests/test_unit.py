@@ -24,12 +24,14 @@ from raven.config import (
 from raven.ingestion import (
     DEFAULT_FILTERS,
     SEMANTIC_FILTERS,
+    _create_session_with_retries,
     format_search_result,
     ingest_paper,
     search_works,
     search_works_keyword,
     undo_inverted_index,
 )
+from raven.llm import _make_cache_key
 from raven.storage import add_paper, init_database, search_papers
 
 # =============================================================================
@@ -584,8 +586,6 @@ class TestLLMModule:
 
     def test_make_cache_key_deterministic(self):
         """Cache key is deterministic - same inputs produce same key."""
-        from raven.llm import _make_cache_key
-
         key1 = _make_cache_key("test prompt", "system prompt")
         key2 = _make_cache_key("test prompt", "system prompt")
 
@@ -593,8 +593,6 @@ class TestLLMModule:
 
     def test_make_cache_key_unique_inputs(self):
         """Different inputs produce different keys."""
-        from raven.llm import _make_cache_key
-
         key1 = _make_cache_key("prompt one", "system one")
         key2 = _make_cache_key("prompt two", "system two")
 
@@ -602,8 +600,6 @@ class TestLLMModule:
 
     def test_make_cache_key_prevents_collision(self):
         """Cache key uses SHA256 to prevent hash() collisions."""
-        from raven.llm import _make_cache_key
-
         # Python's hash() can collide for different strings
         # SHA256 should not collide for these test cases
         test_cases = [
@@ -622,8 +618,6 @@ class TestLLMModule:
 
     def test_make_cache_key_with_none_system_prompt(self):
         """Cache key handles None system_prompt."""
-        from raven.llm import _make_cache_key
-
         key_with_none = _make_cache_key("prompt", None)
         key_with_empty = _make_cache_key("prompt", "")
 
@@ -640,8 +634,6 @@ class TestIngestionRetryLogic:
 
     def test_create_session_with_retries(self):
         """Session is created with retry strategy."""
-        from raven.ingestion import _create_session_with_retries
-
         session = _create_session_with_retries()
 
         # Check that adapters are mounted

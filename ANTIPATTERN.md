@@ -57,7 +57,7 @@ Embedding dimension must match the model (384 for multilingual-e5-small). Do not
 
 Use `COLLATE NOCASE` for DOI columns and `LOWER()` in queries to ensure case-insensitive matching. DOI is case-insensitive.
 
-## 5. Local Imports in Tests *(Requires Exception Process)*
+## 5. Local Imports in Functions *(Requires Exception Process)*
 
 Move all imports to module level. Local imports inside functions are harder to mock and hurt test readability.
    ```python

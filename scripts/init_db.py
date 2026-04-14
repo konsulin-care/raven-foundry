@@ -10,6 +10,7 @@ Creates:
     - Vector tables for embeddings storage
 """
 
+import importlib.resources
 import sqlite3
 import sys
 from pathlib import Path
@@ -98,8 +99,6 @@ def main() -> int:
         db.enable_load_extension(True)
 
         try:
-            import importlib.resources
-
             ext_path = importlib.resources.files("sqlite_vector.binaries") / "vector"
             db.load_extension(str(ext_path))
         except ImportError:

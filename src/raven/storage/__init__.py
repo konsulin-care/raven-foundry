@@ -1,5 +1,8 @@
 """Storage module - SQLite + vector storage for Raven."""
 
+import contextlib
+import importlib.resources
+import json
 import logging
 import sqlite3
 import struct
@@ -18,8 +21,6 @@ def _load_vector_extension(conn: sqlite3.Connection) -> None:
     Raises:
         RuntimeError: If the vector extension cannot be loaded.
     """
-    import importlib.resources
-
     ext_path = importlib.resources.files("sqlite_vector.binaries") / "vector"
     conn.enable_load_extension(True)
     try:
@@ -56,7 +57,7 @@ def init_database(db_path: Path) -> None:
     Args:
         db_path: Path to the SQLite database file.
     """
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         # Enable and load sqlite-vector extension
         _load_vector_extension(conn)
 
@@ -123,7 +124,7 @@ def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
     Returns:
         List of paper records matching the query.
     """
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         conn.row_factory = sqlite3.Row
 
         cursor = conn.execute(
@@ -154,7 +155,7 @@ def get_paper_id_by_doi(db_path: Path, doi: str | None) -> int | None:
     if doi is None:
         return None
 
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         cursor = conn.execute(
             "SELECT id FROM papers WHERE LOWER(doi) = LOWER(?)",
             (doi,),
@@ -173,7 +174,7 @@ def get_embedding_exists(db_path: Path, paper_id: int) -> bool:
     Returns:
         True if embedding exists, False otherwise.
     """
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         cursor = conn.execute(
             "SELECT 1 FROM embeddings WHERE paper_id = ?",
             (paper_id,),
@@ -211,7 +212,7 @@ def add_paper(
     Raises:
         ValueError: If a paper with the same DOI already exists.
     """
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         try:
             cursor = conn.execute(
                 """
@@ -264,7 +265,7 @@ def update_paper(
         openalex_id: OpenAlex ID for the paper (optional).
         paper_type: Type of paper (default: 'article').
     """
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         conn.execute(
             """
             UPDATE papers SET
@@ -308,7 +309,7 @@ def add_embedding(db_path: Path, paper_id: int, embedding: list[float]) -> None:
             f"Embedding dimension mismatch: expected {expected_dim}, got {len(embedding)}"
         )
 
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         # Load sqlite-vector extension
         _load_vector_extension(conn)
 
@@ -319,8 +320,6 @@ def add_embedding(db_path: Path, paper_id: int, embedding: list[float]) -> None:
         )
 
         # Insert embedding using vector_as_f32 for proper formatting
-        import json
-
         embedding_json = json.dumps(embedding)
         conn.execute(
             "INSERT OR REPLACE INTO embeddings (paper_id, embedding) VALUES (?, vector_as_f32(?))",
@@ -351,7 +350,7 @@ def search_by_embedding(
             f"Query embedding dimension mismatch: expected {expected_dim}, got {len(query_embedding)}"
         )
 
-    with sqlite3.connect(db_path) as conn:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
         # Load sqlite-vector extension
         _load_vector_extension(conn)
 
@@ -362,8 +361,6 @@ def search_by_embedding(
         )
 
         # Serialize query and run KNN search using vector_full_scan
-        import json
-
         query_json = json.dumps(query_embedding)
         conn.row_factory = sqlite3.Row
 

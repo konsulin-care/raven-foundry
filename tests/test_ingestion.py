@@ -6,6 +6,8 @@ Run with: pytest tests/test_ingestion.py -v
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from raven.ingestion import (
     combine_title_abstract,
     format_search_result,
@@ -248,8 +250,6 @@ class TestIngestPaper:
         mock_add_embedding,
     ):
         """ingest_paper returns None on network error."""
-        import requests
-
         mock_api_key.return_value = "test-key"
         mock_get_paper_id_by_doi.return_value = None
         mock_get_embedding_exists.return_value = False
