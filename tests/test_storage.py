@@ -63,31 +63,23 @@ class TestSerializeF32:
 
 
 class TestInitDatabase:
-    """Tests for init_database function.
+    """Tests for init_database function."""
 
-    Note: These tests verify init_database executes without error.
-    The vec0 virtual table creation depends on sqlite-vec extension loading.
-    """
-
-    def test_init_database_runs_without_error(self, tmp_path):
+    def test_init_database_runs_without_error(self, tmp_path, mocker):
         """init_database executes without raising exceptions."""
         db_path = tmp_path / "test.db"
 
-        # This should run without raising unhandled exceptions
-        # The vec0 extension may fail to load in test env, but function handles it
-        try:
-            init_database(db_path)
-        except ModuleNotFoundError:
-            pytest.skip("sqlite_vec not installed")
+        # Mock the vector extension loader to avoid requiring native extension in tests
+        mocker.patch("raven.storage._load_vector_extension")
+        init_database(db_path)
 
-    def test_init_database_creates_db_file(self, tmp_path):
+    def test_init_database_creates_db_file(self, tmp_path, mocker):
         """init_database creates the database file."""
         db_path = tmp_path / "test.db"
 
-        try:
-            init_database(db_path)
-        except ModuleNotFoundError:
-            pytest.skip("sqlite_vec not installed")
+        # Mock the vector extension loader to avoid requiring native extension in tests
+        mocker.patch("raven.storage._load_vector_extension")
+        init_database(db_path)
 
         # Database file should exist
         assert db_path.exists()
