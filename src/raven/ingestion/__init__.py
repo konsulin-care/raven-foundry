@@ -246,7 +246,7 @@ def _parse_search_query(query: str) -> str:
 
 def search_works(
     query: str,
-    filter: str | None = None,
+    filter_str: str | None = None,
     page: int = 1,
     per_page: int = 50,
     sort: str = "relevance_score:desc",
@@ -258,7 +258,7 @@ def search_works(
 
     Args:
         query: Search query string
-        filter: Additional OpenAlex filters (e.g., "publication_year:>2020")
+        filter_str: Additional OpenAlex filters (e.g., "publication_year:>2020")
         page: Page number (1-indexed)
         per_page: Results per page (max 100)
         sort: Sort order (default: relevance_score:desc)
@@ -279,8 +279,8 @@ def search_works(
 
             # Build filters for semantic search (limited supported filters)
             semantic_filters = [SEMANTIC_FILTERS]
-            if filter:
-                semantic_filters.append(filter)
+            if filter_str:
+                semantic_filters.append(filter_str)
             combined_semantic_filter = ",".join(semantic_filters)
 
             url = f"{base_url}/works"
@@ -311,8 +311,8 @@ def search_works(
 
     # Fallback to keyword search (use full filters)
     filters = [DEFAULT_FILTERS]
-    if filter:
-        filters.append(filter)
+    if filter_str:
+        filters.append(filter_str)
     combined_filter = ",".join(filters)
 
     search_type = "keyword"

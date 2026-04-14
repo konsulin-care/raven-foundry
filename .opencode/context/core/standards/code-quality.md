@@ -106,6 +106,24 @@ doi TEXT UNIQUE NOT NULL COLLATE NOCASE
 | Constants | UPPER_SNAKE | `DEFAULT_GROQ_MODEL`, `SEMANTIC_FILTERS` |
 | Database | snake_case | `papers`, `idx_papers_doi` |
 
+### No built-in name shadowing
+```python
+# Good - use descriptive alternative names
+def search_works(query: str, filter_str: str | None = None):
+    ...
+
+def process_items(items: list[int]) -> list[int]:
+    ...
+
+# Avoid - shadows Python built-ins
+def search_works(query: str, filter: str | None = None):  # Shadows filter()!
+    pass
+
+# Avoid - shadows type built-ins
+def get_items() -> list:  # Shadows list type!
+    ...
+```
+
 ## Error Handling
 
 ### Raise specific errors

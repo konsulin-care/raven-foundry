@@ -164,7 +164,7 @@ def search(
 
         result_data = search_works(
             query=query,
-            filter=filter_str,
+            filter_str=filter_str,
             page=page,
             per_page=per_page,
             sort=sort,

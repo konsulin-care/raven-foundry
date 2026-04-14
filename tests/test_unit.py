@@ -830,7 +830,7 @@ class TestOpenAlexSearch:
         )
 
         result = search_works(
-            "query", filter="publication_year:>2020", use_semantic=False
+            "query", filter_str="publication_year:>2020", use_semantic=False
         )
 
         assert result["search_type"] == "keyword"
@@ -897,7 +897,7 @@ class TestOpenAlexSearch:
         )
 
         result = search_works(
-            "query", filter="publication_year:>2020", use_semantic=False
+            "query", filter_str="publication_year:>2020", use_semantic=False
         )
 
         assert result["search_type"] == "keyword"
