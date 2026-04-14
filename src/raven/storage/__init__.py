@@ -51,6 +51,33 @@ def serialize_f32(vector: list[float]) -> bytes:
     return struct.pack("%sf" % len(vector), *vector)
 
 
+def _safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> None:
+    """Safely add a column with validation and quoting.
+
+    This helper combines whitelist validation with identifier quoting to
+    provide defense-in-depth against SQL injection in DDL statements.
+
+    Args:
+        conn: SQLite connection.
+        col_name: Column name to add.
+        col_type: SQL type (e.g., "TEXT", "INTEGER").
+
+    Raises:
+        ValueError: If column name is not in whitelist.
+    """
+    # Whitelist of valid column names for migration
+    valid_column_names = frozenset(
+        {"authors", "abstract", "publication_year", "venue", "openalex_id"}
+    )
+
+    # Validate against whitelist
+    if col_name not in valid_column_names:
+        raise ValueError(f"Invalid column name in migration: {col_name}")
+
+    # Execute with quoted identifier to prevent SQL injection
+    conn.execute(f"ALTER TABLE papers ADD COLUMN [{col_name}] {col_type}")
+
+
 def init_database(db_path: Path) -> None:
     """Initialize the database with schema and vector support.
 
@@ -90,16 +117,10 @@ def init_database(db_path: Path) -> None:
             "openalex_id": "TEXT",
         }
 
-        # Validate column whitelist once at start (catch dev errors in columns_to_add)
-        valid_columns = frozenset(columns_to_add.keys())
-        for col_name in columns_to_add:
-            if col_name not in valid_columns:
-                raise ValueError(f"Invalid column name in migration: {col_name}")
-
-        # Add missing columns with quoted identifier to prevent SQL injection
+        # Add missing columns using safe helper
         for col_name, col_type in columns_to_add.items():
             if col_name not in existing_columns:
-                conn.execute(f"ALTER TABLE papers ADD COLUMN [{col_name}] {col_type}")
+                _safe_add_column(conn, col_name, col_type)
 
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_openalex_id ON papers(openalex_id)"
