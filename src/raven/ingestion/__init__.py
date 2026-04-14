@@ -603,7 +603,11 @@ def ingest_search_results(
                         "Paper with DOI %s exists without embedding, updating and generating embedding",
                         doi,
                     )
-                    update_paper(db_path, existing_id, **paper_info)
+                    # Remove doi from paper_info before passing to update_paper
+                    sanitized_paper_info = {
+                        k: v for k, v in paper_info.items() if k != "doi"
+                    }
+                    update_paper(db_path, existing_id, **sanitized_paper_info)
                     paper_id = existing_id
             else:
                 # New DOI - add paper

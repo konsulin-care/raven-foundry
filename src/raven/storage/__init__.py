@@ -197,7 +197,7 @@ def add_paper(
 
     Args:
         db_path: Path to the SQLite database file.
-        doi: DOI of the paper (optional).
+        doi: DOI of the paper (optional, will be coerced to empty string if None).
         title: Title of the paper.
         authors: Comma-separated list of authors (optional).
         abstract: Paper abstract (optional).
@@ -214,13 +214,15 @@ def add_paper(
     """
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         try:
+            # Coerce None to empty string for doi field (NOT NULL constraint)
+            doi_value = doi if doi is not None else ""
             cursor = conn.execute(
                 """
                 INSERT INTO papers (doi, title, authors, abstract, publication_year, venue, openalex_id, type)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
-                    doi,
+                    doi_value,
                     title,
                     authors,
                     abstract,
