@@ -231,6 +231,30 @@ from raven.storage import add_paper
 
 **Tests**: `tests/test_unit.py` - All modules tested
 
+## File Size Management
+
+**Rule**: No single Python file should exceed 200 lines.
+
+**Rationale**:
+- Files under 200 lines are easier to understand, test, debug, and review
+- Large files indicate need for modularization (Single Responsibility Principle)
+- Simplifies onboarding and reduces cognitive load
+
+**Workflow after editing**:
+1. Count lines: `wc -l <file>` or `wc -l src/raven/**/*.py`
+2. If any file > 200 lines:
+   - Call CodeReview subagent to review the code
+   - Delegate to plan agent for refactoring strategy
+   - Use Context7 MCP for refactoring best practices
+3. Apply refactoring, verify tests pass
+
+**Exception criteria** (see @ANTIPATTERN.md):
+- Very small utility modules (<50 lines)
+- Highly cohesive module with many small functions
+- Files that are intentionally monolithic by design
+
+**Context7 usage**: When planning refactoring, query Context7 for Python modularization best practices and module structure recommendations.
+
 ## Related Files
 - Module AGENTS.md files: `src/raven/*/AGENTS.md`
 - documentation.md: Docstring standards

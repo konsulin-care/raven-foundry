@@ -19,6 +19,7 @@ from raven.ingestion import (
     normalize_doi,
     undo_inverted_index,
 )
+from raven.storage import init_database
 
 
 class TestNormalizeDoi:
@@ -221,14 +222,14 @@ class TestFormatSearchResult:
 class TestIngestPaper:
     """Tests for ingest_paper function."""
 
-    @patch("raven.ingestion.add_embedding")
-    @patch("raven.ingestion.generate_embedding")
-    @patch("raven.ingestion.update_paper")
-    @patch("raven.ingestion.add_paper")
-    @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_identifier")
+    @patch("raven.ingestion.pipeline.add_embedding")
+    @patch("raven.ingestion.pipeline.generate_embedding")
+    @patch("raven.ingestion.pipeline.update_paper")
+    @patch("raven.ingestion.pipeline.add_paper")
+    @patch("raven.ingestion.pipeline.get_embedding_exists")
+    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_openalex_api_key")
-    @patch("raven.ingestion._create_session_with_retries")
+    @patch("raven.ingestion.api._create_session_with_retries")
     def test_ingest_paper_success(
         self,
         mock_session_cls,
@@ -284,14 +285,14 @@ class TestIngestPaper:
         mock_generate_embedding.assert_called_once_with("Test Paper")
         mock_add_embedding.assert_called_once_with(db_path, 42, [0.1] * 384)
 
-    @patch("raven.ingestion.add_embedding")
-    @patch("raven.ingestion.generate_embedding")
-    @patch("raven.ingestion.update_paper")
-    @patch("raven.ingestion.add_paper")
-    @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_identifier")
+    @patch("raven.storage.add_embedding")
+    @patch("raven.ingestion.pipeline.generate_embedding")
+    @patch("raven.storage.update_paper")
+    @patch("raven.storage.add_paper")
+    @patch("raven.storage.get_embedding_exists")
+    @patch("raven.storage.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_openalex_api_key")
-    @patch("raven.ingestion._create_session_with_retries")
+    @patch("raven.ingestion.api._create_session_with_retries")
     def test_ingest_paper_api_error(
         self,
         mock_session_cls,
@@ -318,14 +319,14 @@ class TestIngestPaper:
 
         assert result is None
 
-    @patch("raven.ingestion.add_embedding")
-    @patch("raven.ingestion.generate_embedding")
-    @patch("raven.ingestion.update_paper")
-    @patch("raven.ingestion.add_paper")
-    @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_identifier")
+    @patch("raven.storage.add_embedding")
+    @patch("raven.ingestion.pipeline.generate_embedding")
+    @patch("raven.storage.update_paper")
+    @patch("raven.storage.add_paper")
+    @patch("raven.storage.get_embedding_exists")
+    @patch("raven.storage.get_paper_id_by_identifier")
     @patch("raven.ingestion.get_openalex_api_key")
-    @patch("raven.ingestion._create_session_with_retries")
+    @patch("raven.ingestion.api._create_session_with_retries")
     def test_ingest_paper_network_error(
         self,
         mock_session_cls,
@@ -356,12 +357,12 @@ class TestIngestPaper:
 class TestIngestSearchResults:
     """Tests for ingest_search_results function."""
 
-    @patch("raven.ingestion.add_embedding")
-    @patch("raven.ingestion.generate_embeddings_batch")
-    @patch("raven.ingestion.update_paper")
-    @patch("raven.ingestion.add_paper")
-    @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_identifier")
+    @patch("raven.ingestion.pipeline.add_embedding")
+    @patch("raven.ingestion.pipeline.generate_embeddings_batch")
+    @patch("raven.ingestion.pipeline.update_paper")
+    @patch("raven.ingestion.pipeline.add_paper")
+    @patch("raven.ingestion.pipeline.get_embedding_exists")
+    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
     def test_ingest_search_results_success(
         self,
         mock_get_paper_id_by_identifier,
@@ -380,6 +381,9 @@ class TestIngestSearchResults:
             [0.2] * 384,
             [0.3] * 384,
         ]
+
+        db_path = Path("/tmp/test.db")
+        init_database(db_path)
 
         search_results = {
             "results": [
@@ -427,12 +431,12 @@ class TestIngestSearchResults:
         mock_generate_batch.assert_called_once()
         assert mock_add_embedding.call_count == 3
 
-    @patch("raven.ingestion.add_embedding")
-    @patch("raven.ingestion.generate_embeddings_batch")
-    @patch("raven.ingestion.update_paper")
-    @patch("raven.ingestion.add_paper")
-    @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_identifier")
+    @patch("raven.ingestion.pipeline.add_embedding")
+    @patch("raven.ingestion.pipeline.generate_embeddings_batch")
+    @patch("raven.ingestion.pipeline.update_paper")
+    @patch("raven.ingestion.pipeline.add_paper")
+    @patch("raven.ingestion.pipeline.get_embedding_exists")
+    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
     def test_ingest_search_results_empty(
         self,
         mock_get_paper_id_by_identifier,
@@ -453,11 +457,11 @@ class TestIngestSearchResults:
         mock_add_paper.assert_not_called()
         mock_generate_batch.assert_not_called()
 
-    @patch("raven.ingestion.add_embedding")
-    @patch("raven.ingestion.generate_embeddings_batch")
-    @patch("raven.ingestion.get_embedding_exists")
-    @patch("raven.ingestion.get_paper_id_by_identifier")
-    @patch("raven.ingestion.add_paper")
+    @patch("raven.ingestion.pipeline.add_embedding")
+    @patch("raven.ingestion.pipeline.generate_embeddings_batch")
+    @patch("raven.ingestion.pipeline.get_embedding_exists")
+    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
+    @patch("raven.ingestion.pipeline.add_paper")
     def test_ingest_search_results_skips_duplicates(
         self,
         mock_add_paper,
@@ -499,8 +503,8 @@ class TestIngestSearchResults:
 class TestGetExistingPaperInfo:
     """Tests for _get_existing_paper_info helper."""
 
-    @patch("raven.ingestion.get_paper_id_by_identifier")
-    @patch("raven.ingestion.get_embedding_exists")
+    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
+    @patch("raven.ingestion.pipeline.get_embedding_exists")
     def test_returns_none_when_paper_not_exists(
         self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
     ):
@@ -508,6 +512,7 @@ class TestGetExistingPaperInfo:
         mock_get_paper_id_by_identifier.return_value = None
 
         db_path = Path("/tmp/test.db")
+        init_database(db_path)  # Initialize database
         existing_id, has_embedding = _get_existing_paper_info(
             db_path, "doi:10.1234/new"
         )
@@ -519,8 +524,8 @@ class TestGetExistingPaperInfo:
         )
         mock_get_embedding_exists.assert_not_called()
 
-    @patch("raven.ingestion.get_paper_id_by_identifier")
-    @patch("raven.ingestion.get_embedding_exists")
+    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
+    @patch("raven.ingestion.pipeline.get_embedding_exists")
     def test_returns_id_and_false_when_no_embedding(
         self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
     ):
@@ -529,6 +534,7 @@ class TestGetExistingPaperInfo:
         mock_get_embedding_exists.return_value = False
 
         db_path = Path("/tmp/test.db")
+        init_database(db_path)  # Initialize database
         existing_id, has_embedding = _get_existing_paper_info(
             db_path, "doi:10.1234/exists"
         )
@@ -537,8 +543,8 @@ class TestGetExistingPaperInfo:
         assert has_embedding is False
         mock_get_embedding_exists.assert_called_once_with(db_path, 42)
 
-    @patch("raven.ingestion.get_paper_id_by_identifier")
-    @patch("raven.ingestion.get_embedding_exists")
+    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
+    @patch("raven.ingestion.pipeline.get_embedding_exists")
     def test_returns_id_and_true_when_has_embedding(
         self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
     ):
@@ -547,6 +553,7 @@ class TestGetExistingPaperInfo:
         mock_get_embedding_exists.return_value = True
 
         db_path = Path("/tmp/test.db")
+        init_database(db_path)  # Initialize database
         existing_id, has_embedding = _get_existing_paper_info(
             db_path, "doi:10.1234/embedded"
         )
@@ -558,11 +565,12 @@ class TestGetExistingPaperInfo:
 class TestHandleExistingPaper:
     """Tests for _handle_existing_paper helper."""
 
-    @patch("raven.ingestion.update_paper")
-    @patch("raven.ingestion.logger")
+    @patch("raven.ingestion.pipeline.update_paper")
+    @patch("raven.ingestion.pipeline.logger")
     def test_returns_none_when_fully_stored(self, mock_logger, mock_update_paper):
         """Returns None when paper has embedding (already fully stored)."""
         db_path = Path("/tmp/test.db")
+        init_database(db_path)  # Initialize database
         paper_info = {"title": "Test Paper", "identifier": "doi:10.1234/test"}
 
         result = _handle_existing_paper(
@@ -573,13 +581,14 @@ class TestHandleExistingPaper:
         mock_update_paper.assert_not_called()
         mock_logger.info.assert_called_once()
 
-    @patch("raven.ingestion.update_paper")
-    @patch("raven.ingestion.logger")
+    @patch("raven.ingestion.pipeline.update_paper")
+    @patch("raven.ingestion.pipeline.logger")
     def test_updates_and_returns_id_when_no_embedding(
         self, mock_logger, mock_update_paper
     ):
         """Updates paper and returns ID when no embedding."""
         db_path = Path("/tmp/test.db")
+        init_database(db_path)  # Initialize database
         paper_info = {"title": "Test Paper", "identifier": "doi:10.1234/test"}
 
         result = _handle_existing_paper(

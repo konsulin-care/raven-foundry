@@ -22,767 +22,113 @@ Rules:
 - Do not use LLMs in this module
 - Keep processing CPU-efficient
 - Ensure ingestion integrates cleanly with CLI workflow
+
+Module Structure:
+- api.py: OpenAlex API client base (fetch)
+- search.py: Search operations (semantic, keyword, hybrid)
+- metadata.py: Metadata extraction from OpenAlex results
+- identifier.py: DOI/normalization utilities
+- text.py: Abstract reconstruction, result formatting
+- pipeline.py: Ingestion orchestration (ingest_paper, ingest_search_results)
+- bibtex.py: BibTeX parsing
+- __init__.py: Re-exports for backward compatibility
 """
 
 import logging
-import time
-from pathlib import Path
-from typing import Any
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+# Re-export for backward compatibility
+__all__ = [
+    # Config
+    "get_openalex_api_key",
+    "get_openalex_api_url",
+    # Embeddings
+    "generate_embedding",
+    "generate_embeddings_batch",
+    # Ingestion API
+    "DEFAULT_FILTERS",
+    "DEFAULT_SORT_ORDER",
+    "SEMANTIC_FILTERS",
+    "_create_session_with_retries",
+    "_get_openalex_base_url",
+    "fetch_work",
+    # Identifier
+    "normalize_doi",
+    "normalize_identifier",
+    # Metadata
+    "_prepare_paper_info",
+    # Pipeline
+    "_get_existing_paper_info",
+    "_handle_existing_paper",
+    "ingest_paper",
+    "ingest_search_results",
+    # Search
+    "search_works",
+    "search_works_semantic",
+    "search_works_keyword",
+    # Text
+    "combine_title_abstract",
+    "format_search_result",
+    "undo_inverted_index",
+    # Storage
+    "add_embedding",
+    "add_paper",
+    "get_embedding_exists",
+    "get_paper_id_by_identifier",
+    "update_paper",
+    # Logger
+    "logger",
+]
 
+# Re-export config functions used in tests
 from raven.config import get_openalex_api_key, get_openalex_api_url
-from raven.embeddings import generate_embedding, generate_embeddings_batch
+
+# Re-export embeddings functions for backward compatibility
+from raven.embeddings import (
+    generate_embedding,
+    generate_embeddings_batch,
+)
+
+# Re-export from submodules for backward compatibility
+from raven.ingestion.api import (
+    DEFAULT_FILTERS,
+    DEFAULT_SORT_ORDER,
+    SEMANTIC_FILTERS,
+    _create_session_with_retries,
+    _get_openalex_base_url,
+    fetch_work,
+)
+from raven.ingestion.identifier import (
+    normalize_doi,
+    normalize_identifier,
+)
+from raven.ingestion.metadata import _prepare_paper_info
+from raven.ingestion.pipeline import (
+    _get_existing_paper_info,
+    _handle_existing_paper,
+    ingest_paper,
+    ingest_search_results,
+)
+from raven.ingestion.search import (
+    search_works,
+    search_works_semantic,
+)
+from raven.ingestion.search_keyword import (
+    search_works_keyword,
+)
+from raven.ingestion.text import (
+    combine_title_abstract,
+    format_search_result,
+    undo_inverted_index,
+)
+
+# Re-export storage functions for backward compatibility
 from raven.storage import (
     add_embedding,
     add_paper,
-    extract_identifier,
     get_embedding_exists,
     get_paper_id_by_identifier,
     update_paper,
 )
 
-# Default filters for search results
-# Note: Semantic search has limited filter support, so we use separate filters
-# has_doi removed - we extract identifier from work['ids'] which includes DOI, OpenAlex, PMID, MAG
-DEFAULT_FILTERS = "is_oa:true"  # For keyword search
-SEMANTIC_FILTERS = "is_oa:true"  # For semantic search (limited to: is_oa, has_abstract, has_fulltext, etc.)
-
-# Default sort order for search results
-DEFAULT_SORT_ORDER = "relevance_score:desc"
-
-# Configure logging
+# Re-export logger for backward compatibility
 logger = logging.getLogger(__name__)
-
-
-def _create_session_with_retries() -> requests.Session:
-    """Create a requests session with retry logic and backoff."""
-    session = requests.Session()
-    retry_strategy = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"],
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    # Only use HTTPS - never fallback to insecure HTTP
-    session.mount("https://", adapter)
-    return session
-
-
-def _get_openalex_base_url() -> str:
-    """Get OpenAlex API base URL from config."""
-    return get_openalex_api_url()
-
-
-def normalize_doi(doi: str) -> str:
-    """Normalize DOI by stripping URL prefixes and case normalizing."""
-    doi = doi.strip().lower()
-    if doi.startswith("https://doi.org/"):
-        doi = doi.replace("https://doi.org/", "")
-    elif doi.startswith("doi:"):
-        doi = doi.replace("doi:", "")
-    return doi
-
-
-def normalize_identifier(identifier: str) -> str:
-    """Detect and normalize identifier type for OpenAlex API.
-
-    Supported formats:
-    - DOI: 10.5281/zenodo.18201069, doi:10.5281/zenodo.18201069, https://doi.org/10.5281/zenodo.18201069
-    - OpenAlex: W7119934875, openalex:W7119934875, https://openalex.org/W7119934875
-    - PMID: 29456894, pmid:29456894, https://pubmed.ncbi.nlm.nih.gov/29456894
-    - MAG: 2741809807, mag:2741809807
-
-    Default to OpenAlex ID format if unrecognized.
-
-    Args:
-        identifier: Raw identifier string from user.
-
-    Returns:
-        Normalized identifier with explicit prefix for OpenAlex API.
-    """
-    id = identifier.strip()
-
-    # Already has explicit prefix
-    for prefix in ("doi:", "openalex:", "pmid:", "mag:"):
-        if id.lower().startswith(prefix):
-            return id.lower()
-
-    # DOI URL pattern (contains doi.org/)
-    if "doi.org/" in id.lower():
-        cleaned = (
-            id.lower().replace("https://doi.org/", "").replace("http://doi.org/", "")
-        )
-        return f"doi:{cleaned}"
-
-    # OpenAlex URL
-    if "openalex.org/" in id.lower():
-        cleaned = (
-            id.lower()
-            .replace("https://openalex.org/", "")
-            .replace("http://openalex.org/", "")
-        )
-        return f"openalex:{cleaned}"
-
-    # PubMed URL
-    if "pubmed.ncbi.nlm.nih.gov/" in id.lower():
-        cleaned = id.lower().replace("https://pubmed.ncbi.nlm.nih.gov/", "")
-        return f"pmid:{cleaned}"
-
-    # DOI pattern (contains /)
-    if "/" in id:
-        return f"doi:{id.lower()}"
-
-    # PMID (digits only, 7+ digits)
-    if id.isdigit() and len(id) >= 7:
-        return f"pmid:{id}"
-
-    # MAG (digits only)
-    if id.isdigit():
-        return f"mag:{id}"
-
-    # OpenAlex ID (starts with W followed by digits)
-    if id.upper().startswith("W") and len(id) > 1 and id[1:].isdigit():
-        return f"openalex:{id.upper()}"
-
-    # Default to OpenAlex ID (warn user to use explicit prefix)
-    logger.warning(
-        "Unrecognized identifier format '%s'. Treating as OpenAlex ID. "
-        "Use explicit prefix (doi:, openalex:, pmid:, mag:) for clarity.",
-        identifier,
-    )
-    return f"openalex:{id.upper()}"
-
-
-def combine_title_abstract(title: str, abstract: str | None) -> str:
-    """Combine title and abstract for embedding generation.
-
-    Args:
-        title: Paper title.
-        abstract: Paper abstract (may be None or empty).
-
-    Returns:
-        Combined text suitable for embedding generation.
-    """
-    if abstract and abstract.strip():
-        return f"{title} {abstract}"
-    return title
-
-
-def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
-    """Ingest a paper by identifier from OpenAlex with embedding generation.
-
-    Supports multiple identifier types:
-    - DOI: 10.5281/zenodo.18201069, doi:10.5281/zenodo.18201069
-    - OpenAlex ID: W7119934875, openalex:W7119934875
-    - PMID: 29456894, pmid:29456894
-    - MAG: 2741809807, mag:2741809807
-
-    Fetches paper metadata from OpenAlex, stores it in the database,
-    generates a semantic embedding from title + abstract, and stores
-    the embedding for vector search.
-
-    Args:
-        db_path: Path to the SQLite database file.
-        identifier: Identifier of the paper (DOI, OpenAlex ID, PMID, or MAG).
-
-    Returns:
-        Dict with paper_id, identifier, title, type, and embedding, or None on failure.
-    """
-    # Get API configuration
-    api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
-
-    # Normalize identifier (detects type automatically)
-    identifier = normalize_identifier(identifier)
-
-    # Query OpenAlex API
-    url = f"{base_url}/works/{identifier}?api_key={api_key}"
-
-    # Use session with retry logic
-    session = _create_session_with_retries()
-    try:
-        response = session.get(url, timeout=30)
-    except requests.exceptions.RequestException as e:
-        logger.error("Network error fetching paper: %s", e)
-        return None
-
-    if response.status_code != 200:
-        logger.error("OpenAlex API error: status %s", response.status_code)
-        return None
-
-    try:
-        data = response.json()
-    except requests.exceptions.JSONDecodeError as e:
-        logger.error("Failed to parse response: %s", e)
-        return None
-
-    # Extract identifier from work's ids (priority: doi > openalex > pmid > mag)
-    final_identifier = extract_identifier(data.get("ids"))
-
-    # Extract metadata
-    title = data.get("title", "Untitled")
-    paper_type = data.get("type", "article")
-    abstract = ""
-    abstract_inverted = data.get("abstract_inverted_index")
-    if abstract_inverted:
-        abstract = undo_inverted_index(abstract_inverted)
-
-    # Reconstruct authors list from OpenAlex format
-    authors_list = data.get("authorships", [])
-    authors = (
-        ", ".join(a.get("author", {}).get("display_name", "") for a in authors_list)
-        or None
-    )
-
-    # Idempotent ingestion: Check if identifier exists first
-    existing_id = get_paper_id_by_identifier(db_path, final_identifier)
-
-    if existing_id is not None:
-        # Identifier exists - check if embedding exists
-        if get_embedding_exists(db_path, existing_id):
-            # Identifier and embedding both exist - skip with info log
-            logger.info(
-                "Paper with identifier %s already fully stored (paper + embedding)",
-                final_identifier,
-            )
-            return {
-                "paper_id": existing_id,
-                "identifier": final_identifier,
-                "title": title,
-                "type": paper_type,
-                "embedding": None,  # Not regenerated
-            }
-        else:
-            # Identifier exists but no embedding - update metadata and regenerate embedding
-            logger.info(
-                "Paper with identifier %s exists without embedding, updating and generating embedding",
-                final_identifier,
-            )
-            update_paper(
-                db_path,
-                paper_id=existing_id,
-                title=title,
-                authors=authors,
-                abstract=abstract,
-                publication_year=data.get("publication_year"),
-                venue=data.get("host_venue", {}).get("display_name"),
-                openalex_id=data.get("id"),
-                paper_type=paper_type,
-            )
-            paper_id = existing_id
-    else:
-        # New identifier - add paper
-        logger.info("Adding new paper with identifier %s", final_identifier)
-        paper_id = add_paper(
-            db_path,
-            identifier=final_identifier,
-            title=title,
-            authors=authors,
-            abstract=abstract,
-            publication_year=data.get("publication_year"),
-            venue=data.get("host_venue", {}).get("display_name"),
-            openalex_id=data.get("id"),
-            paper_type=paper_type,
-        )
-
-    # Generate embedding from title + abstract (optional - may fail if vec extension unavailable)
-    embedding = None
-    try:
-        embedding_text = combine_title_abstract(title, abstract)
-        embedding = generate_embedding(embedding_text)
-        # Store embedding for vector search
-        add_embedding(db_path, paper_id, embedding)
-    except Exception as e:
-        # Log but continue without embedding if extension unavailable
-        logger.warning("Failed to generate/store embedding: %s", e)
-
-    return {
-        "paper_id": paper_id,
-        "identifier": final_identifier,
-        "title": title,
-        "type": paper_type,
-        "embedding": embedding,
-    }
-
-
-# Rate limiting for semantic search (1 request per second)
-_semantic_last_request_time: float = 0.0
-
-
-def _rate_limit_semantic() -> None:
-    """Apply rate limiting for semantic search."""
-    global _semantic_last_request_time
-    elapsed = time.time() - _semantic_last_request_time
-    if elapsed < 1.0:
-        time.sleep(1.0 - elapsed)
-    _semantic_last_request_time = time.time()
-
-
-def _parse_search_query(query: str) -> str:
-    """Parse user query to OpenAlex search syntax.
-
-    Handles:
-    - Boolean operators (AND, OR, NOT) - passed through
-    - Quoted phrases - kept as exact match
-    - Wildcards (*, ?) - passed through
-    - Fuzzy search (~N) - passed through
-    """
-    # Normalize whitespace
-    query = " ".join(query.split())
-    return query
-
-
-def search_works(
-    query: str,
-    filter_str: str | None = None,
-    page: int = 1,
-    per_page: int = 50,
-    sort: str = DEFAULT_SORT_ORDER,
-    use_semantic: bool = True,
-) -> dict[str, Any]:
-    """Search works via OpenAlex API.
-
-    Tries semantic search first, falls back to keyword search on rate limit.
-
-    Args:
-        query: Search query string
-        filter_str: Additional OpenAlex filters (e.g., "publication_year:>2020")
-        page: Page number (1-indexed)
-        per_page: Results per page (max 100)
-        sort: Sort order (default: relevance_score:desc)
-        use_semantic: If True, try semantic first, then fallback to keyword
-
-    Returns:
-        Dict with 'results', 'meta' (pagination info), 'search_type' indicator
-    """
-    api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
-
-    session = _create_session_with_retries()
-
-    # Try semantic search first if enabled
-    if use_semantic:
-        try:
-            _rate_limit_semantic()
-
-            # Build filters for semantic search (limited supported filters)
-            semantic_filters = [SEMANTIC_FILTERS]
-            if filter_str:
-                semantic_filters.append(filter_str)
-            combined_semantic_filter = ",".join(semantic_filters)
-
-            url = f"{base_url}/works"
-            params: dict[str, Any] = {
-                "search.semantic": query,
-                "filter": combined_semantic_filter,
-                "sort": sort,
-                "per_page": min(per_page, 50),  # Semantic max 50
-                "page": page,
-                "api_key": api_key,
-            }
-
-            response = session.get(url, params=params, timeout=30)
-
-            if response.status_code == 200:
-                data: dict[str, Any] = response.json()
-                data["search_type"] = "semantic"
-                return data
-            elif response.status_code == 429:
-                logger.info("Semantic search rate limited, falling back to keyword")
-            else:
-                logger.warning(
-                    "Semantic search failed: status %s, falling back to keyword",
-                    response.status_code,
-                )
-        except requests.exceptions.RequestException as e:
-            logger.warning("Semantic search error: %s, falling back to keyword", e)
-
-    # Fallback to keyword search (use full filters)
-    filters = [DEFAULT_FILTERS]
-    if filter_str:
-        filters.append(filter_str)
-    combined_filter = ",".join(filters)
-
-    search_type = "keyword"
-    url = f"{base_url}/works"
-    # Note: params shadows the semantic branch's params but they're in different branches
-    keyword_params: dict[str, Any] = {
-        "search": _parse_search_query(query),
-        "filter": combined_filter,
-        "sort": sort,
-        "per_page": min(per_page, 100),  # Keyword max 100
-        "page": page,
-        "api_key": api_key,
-    }
-
-    try:
-        response = session.get(url, params=keyword_params, timeout=30)
-
-        if response.status_code != 200:
-            logger.error("OpenAlex search error: status %s", response.status_code)
-            return {"results": [], "meta": {"count": 0}, "search_type": search_type}
-
-        # Note: data shadows the semantic branch's data but they're in different branches
-        keyword_data: dict[str, Any] = response.json()
-        keyword_data["search_type"] = search_type
-        return keyword_data
-
-    except requests.exceptions.RequestException as e:
-        logger.error("Network error during search: %s", e)
-        return {"results": [], "meta": {"count": 0}, "search_type": search_type}
-
-
-def search_works_keyword(
-    query: str,
-    filter_str: str | None = None,
-    page: int = 1,
-    per_page: int = 50,
-    sort: str = DEFAULT_SORT_ORDER,
-) -> dict[str, Any]:
-    """Keyword-only search (explicit).
-
-    Args:
-        query: Search query string
-        filter_str: Additional OpenAlex filters
-        page: Page number
-        per_page: Results per page (max 100)
-        sort: Sort order
-
-    Returns:
-        Dict with 'results', 'meta', 'search_type'='keyword'
-    """
-    api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
-
-    filters = [DEFAULT_FILTERS]
-    if filter_str:
-        filters.append(filter_str)
-    combined_filter = ",".join(filters)
-
-    session = _create_session_with_retries()
-    url = f"{base_url}/works"
-    params: dict[str, Any] = {
-        "search": _parse_search_query(query),
-        "filter": combined_filter,
-        "sort": sort,
-        "per_page": min(per_page, 100),
-        "page": page,
-        "api_key": api_key,
-    }
-
-    try:
-        response = session.get(url, params=params, timeout=30)
-
-        if response.status_code != 200:
-            logger.error(
-                "OpenAlex keyword search error: status %s", response.status_code
-            )
-            return {"results": [], "meta": {"count": 0}, "search_type": "keyword"}
-
-        data: dict[str, Any] = response.json()
-        data["search_type"] = "keyword"
-        return data
-
-    except requests.exceptions.RequestException as e:
-        logger.error("Network error during keyword search: %s", e)
-        return {"results": [], "meta": {"count": 0}, "search_type": "keyword"}
-
-
-def search_works_semantic(
-    query: str,
-    per_page: int = 50,
-) -> dict[str, Any]:
-    """Semantic-only search (explicit).
-
-    Note: Limited to 1 request per second, max 50 results.
-
-    Args:
-        query: Semantic search query
-        per_page: Results per page (max 50)
-
-    Returns:
-        Dict with 'results', 'meta', 'search_type'='semantic'
-    """
-    _rate_limit_semantic()
-
-    api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
-
-    session = _create_session_with_retries()
-    url = f"{base_url}/works"
-    params: dict[str, Any] = {
-        "search.semantic": query,
-        "filter": SEMANTIC_FILTERS,
-        "sort": DEFAULT_SORT_ORDER,
-        "per_page": min(per_page, 50),
-        "api_key": api_key,
-    }
-
-    try:
-        response = session.get(url, params=params, timeout=30)
-
-        if response.status_code != 200:
-            logger.error(
-                "OpenAlex semantic search error: status %s", response.status_code
-            )
-            return {"results": [], "meta": {"count": 0}, "search_type": "semantic"}
-
-        data: dict[str, Any] = response.json()
-        data["search_type"] = "semantic"
-        return data
-
-    except requests.exceptions.RequestException as e:
-        logger.error("Network error during semantic search: %s", e)
-        return {"results": [], "meta": {"count": 0}, "search_type": "semantic"}
-
-
-def undo_inverted_index(inverted_index: dict[str, list[int]]) -> str:
-    """Reconstruct original text from OpenAlex abstract_inverted_index.
-
-    Optimized implementation - O(n) instead of O(n log n) by using
-    direct indexing instead of sorting.
-
-    Args:
-        inverted_index: OpenAlex abstract_inverted_index dict
-
-    Returns:
-        Reconstructed text string
-    """
-    if not inverted_index:
-        return ""
-
-    # Find maximum index to pre-allocate result list
-    max_index = 0
-    for positions in inverted_index.values():
-        if positions:
-            max_index = max(max_index, max(positions))
-
-    # Pre-allocate list with None placeholders (use str | None for type safety)
-    result: list[str | None] = [None] * (max_index + 1)
-
-    # Place each word at its position(s)
-    for word, positions in inverted_index.items():
-        for pos in positions:
-            result[pos] = word
-
-    # Filter out None and join with spaces
-    return " ".join(word for word in result if word is not None)
-
-
-def format_search_result(work: dict[str, Any]) -> dict[str, Any]:
-    """Format OpenAlex work result for display/storage.
-
-    Includes: Identifier, Year, Type, Citation, Open Access, Abstract, Embedding Text
-    """
-    # Reconstruct abstract from inverted index if available
-    abstract = ""
-    abstract_inverted = work.get("abstract_inverted_index")
-    if abstract_inverted:
-        abstract = undo_inverted_index(abstract_inverted)
-
-    # Get title for embedding text generation
-    title = work.get("title", "Untitled")
-
-    # Extract identifier from work['ids'] using priority (doi > openalex > pmid > mag)
-    identifier = extract_identifier(work.get("ids"))
-
-    return {
-        "identifier": identifier,
-        "title": title,
-        "type": work.get("type", "article"),
-        "publication_year": work.get("publication_year"),
-        "cited_by_count": work.get("cited_by_count", 0),
-        "open_access": work.get("open_access", {}).get("is_oa", False),
-        "abstract": abstract,
-        "id": work.get("id"),
-        "relevance_score": work.get("relevance_score"),
-        "embedding_text": combine_title_abstract(title, abstract),
-    }
-
-
-def _get_existing_paper_info(
-    db_path: Path, identifier: str | None
-) -> tuple[int | None, bool]:
-    """Check if identifier exists in database and whether it has an embedding.
-
-    Args:
-        db_path: Path to the SQLite database file.
-        identifier: Identifier to check for.
-
-    Returns:
-        Tuple of (existing_paper_id, has_embedding). has_embedding is False
-        if paper doesn't exist.
-    """
-    existing_id = get_paper_id_by_identifier(db_path, identifier)
-    if existing_id is None:
-        return None, False
-    has_embedding = get_embedding_exists(db_path, existing_id)
-    return existing_id, has_embedding
-
-
-def _handle_existing_paper(
-    db_path: Path,
-    identifier: str | None,
-    paper_info: dict[str, Any],
-    existing_id: int,
-    has_embedding: bool,
-) -> int | None:
-    """Handle case where identifier already exists in database.
-
-    Args:
-        db_path: Path to the SQLite database file.
-        identifier: Identifier of the paper.
-        paper_info: Paper metadata dict.
-        existing_id: Existing paper ID in database.
-        has_embedding: Whether paper already has an embedding.
-
-    Returns:
-        paper_id if paper should be processed, None if fully stored (skip).
-    """
-    if has_embedding:
-        # Identifier and embedding both exist - skip with info log
-        logger.info(
-            "Paper with identifier %s already fully stored (paper + embedding)",
-            identifier,
-        )
-        return None
-
-    # Identifier exists but no embedding - update metadata and regenerate
-    logger.info(
-        "Paper with identifier %s exists without embedding, updating and generating embedding",
-        identifier,
-    )
-    # Remove identifier from paper_info before passing to update_paper
-    sanitized_paper_info = {k: v for k, v in paper_info.items() if k != "identifier"}
-    update_paper(db_path, existing_id, **sanitized_paper_info)
-    return existing_id
-
-
-def _prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
-    """Prepare paper info dict and embedding text from OpenAlex work result.
-
-    Args:
-        work: Single work result from OpenAlex search API.
-
-    Returns:
-        Tuple of (paper_info dict, embedding_text string).
-    """
-    # Format the work result
-    formatted = format_search_result(work)
-
-    # Extract needed fields for storage
-    identifier = formatted.get("identifier")
-    title = formatted.get("title", "Untitled")
-    abstract = formatted.get("abstract", "")
-
-    # Reconstruct authors from authorship data
-    authors_list = work.get("authorships", [])
-    authors = (
-        ", ".join(a.get("author", {}).get("display_name", "") for a in authors_list)
-        or None
-    )
-
-    paper_info = {
-        "identifier": identifier,
-        "title": title,
-        "authors": authors,
-        "abstract": abstract,
-        "publication_year": work.get("publication_year"),
-        "venue": work.get("host_venue", {}).get("display_name"),
-        "openalex_id": work.get("id"),
-        "paper_type": work.get("type", "article"),
-    }
-
-    return paper_info, formatted["embedding_text"]
-
-
-def ingest_search_results(
-    db_path: Path, search_results: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """Ingest multiple papers from OpenAlex search results.
-
-    Uses batch embedding generation for efficiency. Handles missing abstracts
-    gracefully by using title only.
-
-    Args:
-        db_path: Path to the SQLite database file.
-        search_results: Dict with 'results' list from OpenAlex search API.
-
-    Returns:
-        List of ingested paper dicts with paper_id, identifier, title, type, embedding.
-    """
-    results = search_results.get("results", [])
-    if not results:
-        return []
-
-    # Prepare paper data and embedding texts
-    papers_data: list[tuple[dict[str, Any], str]] = []
-
-    for work in results:
-        paper_info, embedding_text = _prepare_paper_info(work)
-        papers_data.append((paper_info, embedding_text))
-
-    # Batch generate embeddings (optional - may fail if vec extension unavailable)
-    embeddings = None
-    try:
-        embedding_texts = [text for _, text in papers_data]
-        embeddings = generate_embeddings_batch(embedding_texts)
-    except Exception as e:
-        logger.warning("Failed to generate embeddings: %s", e)
-
-    # Store papers and embeddings
-    ingested = []
-    for i, (paper_info, _) in enumerate(papers_data):
-        identifier = paper_info.get("identifier")
-        embedding = embeddings[i] if embeddings is not None else None
-
-        # Handle identifier-based deduplication
-        if identifier:
-            existing_id, has_embedding = _get_existing_paper_info(db_path, identifier)
-
-            if existing_id is not None:
-                paper_id = _handle_existing_paper(
-                    db_path, identifier, paper_info, existing_id, has_embedding
-                )
-                if paper_id is None:
-                    # Already fully stored - add to results with None embedding
-                    ingested.append(
-                        {
-                            "paper_id": existing_id,
-                            "identifier": identifier,
-                            "title": paper_info["title"],
-                            "type": paper_info["paper_type"],
-                            "embedding": None,
-                        }
-                    )
-                    continue
-            else:
-                # New identifier - add paper
-                logger.info("Adding new paper with identifier %s", identifier)
-                paper_id = add_paper(db_path, **paper_info)
-        else:
-            # No identifier - add paper (will be deduplicated by other means if needed)
-            paper_id = add_paper(db_path, **paper_info)
-
-        # Add embedding if available
-        if embedding is not None:
-            try:
-                add_embedding(db_path, paper_id, embedding)
-            except Exception as e:
-                logger.warning("Failed to store embedding: %s", e)
-
-        ingested.append(
-            {
-                "paper_id": paper_id,
-                "identifier": paper_info["identifier"],
-                "title": paper_info["title"],
-                "type": paper_info["paper_type"],
-                "embedding": embedding,
-            }
-        )
-
-    return ingested

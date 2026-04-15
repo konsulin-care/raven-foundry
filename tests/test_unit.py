@@ -256,7 +256,7 @@ class TestCLICommands:
         runner = CliRunner()
 
         # Mock the OpenAlex API response with abstract
-        with patch("raven.ingestion.search_works") as mock_search:
+        with patch("raven.cli.search.search_works") as mock_search:
             mock_search.return_value = {
                 "results": [
                     {
@@ -295,7 +295,7 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("raven.main.get_model_cache_size") as mock_size:
+        with patch("raven.cli.cache.get_model_cache_size") as mock_size:
             mock_size.return_value = 440401920  # ~420 MB
 
             result = runner.invoke(raven.main.cli, ["cache", "status"])
@@ -310,7 +310,7 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("raven.main.get_model_cache_size") as mock_size:
+        with patch("raven.cli.cache.get_model_cache_size") as mock_size:
             mock_size.return_value = None
 
             result = runner.invoke(raven.main.cli, ["cache", "status"])
@@ -324,7 +324,7 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("raven.main.clean_model_cache") as mock_clean:
+        with patch("raven.cli.cache.clean_model_cache") as mock_clean:
             result = runner.invoke(raven.main.cli, ["cache", "clean"])
 
             assert result.exit_code == 0
@@ -401,21 +401,17 @@ class TestCLICommands:
         def mock_resolve_db_path(env_path=None, db_path_param=None):
             return db_path
 
-        monkeypatch.setattr(raven.main, "_resolve_db_path", mock_resolve_db_path)
-
         # Patch ingest_paper to return a successful result
         mock_result = {
             "identifier": "doi:10.1234/test",
             "title": "Test Research Paper",
             "type": "article",
         }
-        monkeypatch.setattr(
-            raven.ingestion, "ingest_paper", lambda db, doi: mock_result
-        )
-
-        result = runner.invoke(
-            raven.main.cli, ["ingest", "10.1234/test", "--db", str(db_path)]
-        )
+        with patch("raven.cli.ingest._resolve_db_path", mock_resolve_db_path):
+            with patch("raven.cli.ingest.ingest_paper", lambda db, doi: mock_result):
+                result = runner.invoke(
+                    raven.main.cli, ["ingest", "10.1234/test", "--db", str(db_path)]
+                )
 
         assert result.exit_code == 0
         assert "Ingesting: 10.1234/test" in result.output
@@ -430,12 +426,12 @@ class TestCLICommands:
         def mock_resolve_db_path(env_path=None, db_path_param=None):
             return db_path
 
-        monkeypatch.setattr(raven.main, "_resolve_db_path", mock_resolve_db_path)
-
         # Patch ingest_paper to return None (failure case)
-        monkeypatch.setattr(
-            raven.ingestion, "ingest_paper", lambda db, identifier: None
-        )
+        with patch("raven.cli.ingest._resolve_db_path", mock_resolve_db_path):
+            with patch("raven.cli.ingest.ingest_paper", lambda db, identifier: None):
+                result = runner.invoke(
+                    raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
+                )
 
         result = runner.invoke(
             raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]

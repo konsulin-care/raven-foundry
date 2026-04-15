@@ -50,7 +50,7 @@ def _get_data_dir() -> Path:
         return home / ".config" / "raven"
 
 
-def _find_env_file(env_path: Optional[Path] = None) -> Optional[Path]:
+def _find_env_file(env_path: str | Path | None = None) -> Optional[Path]:
     """Find .env file.
 
     Args:
@@ -64,8 +64,9 @@ def _find_env_file(env_path: Optional[Path] = None) -> Optional[Path]:
     """
     # 1. User-provided explicit path
     if env_path is not None:
-        if env_path.exists() and env_path.is_file():
-            return env_path
+        path_obj = Path(env_path) if isinstance(env_path, str) else env_path
+        if path_obj.exists() and path_obj.is_file():
+            return path_obj
         return None
 
     # 2. Default: cwd/.env
@@ -104,7 +105,7 @@ def _parse_env_file(env_path: Path) -> dict[str, str]:
     return config
 
 
-def _load_config(env_path: Optional[Path] = None) -> dict[str, str]:
+def _load_config(env_path: str | Path | None = None) -> dict[str, str]:
     """Load configuration from .env file.
 
     Args:

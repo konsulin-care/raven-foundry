@@ -63,6 +63,13 @@ Create `src/raven/<module>/__init__.py` with explicit type annotations:
 # 3. Contract reference to AGENTS.md rule
 ```
 
+### File Size Limits
+
+- **Maximum**: 200 lines per file
+- **Check command**: `wc -l src/raven/**/*.py`
+- **If exceeded**: Trigger CodeReview agent, then delegate to plan agent using Context7 for refactoring
+- See @.opencode/context/core/standards/code-quality.md for detailed rationale
+
 ---
 
 ## Layer 3: Testing Requirements
