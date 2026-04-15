@@ -7,12 +7,18 @@ from typing import Optional
 
 import click
 
-from raven.cli.cache import cache
-from raven.cli.info import info
-from raven.cli.ingest import ingest
-from raven.cli.init import init
-from raven.cli.search import search
+from raven.cli.lazy_group import LazyGroup
 from raven.config import _get_data_dir, _load_config
+
+# Lazy-loaded subcommands map
+# Format: "command_name": "module.path:command_object_name"
+_LAZY_SUBCOMMANDS = {
+    "search": "raven.cli.search:search",
+    "ingest": "raven.cli.ingest:ingest",
+    "init": "raven.cli.init:init",
+    "info": "raven.cli.info:info",
+    "cache": "raven.cli.cache:cache",
+}
 
 # Configure logging to show INFO level messages in CLI
 logging.basicConfig(
@@ -61,19 +67,14 @@ def _resolve_db_path(
     return _get_data_dir() / "raven.db"
 
 
-@click.group()
+@click.group(
+    cls=LazyGroup,
+    lazy_subcommands=_LAZY_SUBCOMMANDS,
+)
 @click.pass_context
 def cli(ctx: click.Context) -> None:
     """Raven - Offline-first CLI research system for academic knowledge curation."""
     ctx.ensure_object(dict)
-
-
-# Register commands
-cli.add_command(search)
-cli.add_command(ingest)
-cli.add_command(init)
-cli.add_command(info)
-cli.add_command(cache)
 
 
 if __name__ == "__main__":

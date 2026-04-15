@@ -1,9 +1,7 @@
-"""CLI commands for Raven."""
+"""CLI commands for Raven.
 
-from raven.cli.cache import cache
-from raven.cli.info import info
-from raven.cli.ingest import ingest
-from raven.cli.init import init
-from raven.cli.search import search
+Note: Commands are now lazily loaded via LazyGroup in raven.main.
+This module is kept for backwards compatibility.
+"""
 
 __all__ = ["cache", "info", "init", "ingest", "search"]
