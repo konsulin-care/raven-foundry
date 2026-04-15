@@ -3,7 +3,10 @@
 import os
 import platform
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from pathlib import Path as _Path
 
 # Default values
 DEFAULT_OPENALEX_API_URL = "https://api.openalex.org"
@@ -11,6 +14,18 @@ DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 
 # Global config cache
 _config: dict[str, str] = {}
+
+__all__ = [
+    "_get_data_dir",
+    "_load_config",
+    "_reset_config",
+    "_find_env_file",
+    "_parse_env_file",
+    "get_groq_api_key",
+    "get_groq_model",
+    "get_openalex_api_key",
+    "get_openalex_api_url",
+]
 
 
 def _reset_config() -> None:
@@ -207,3 +222,12 @@ def get_openalex_api_url() -> str:
         or os.environ.get("OPENALEX_API_URL")
         or DEFAULT_OPENALEX_API_URL
     )
+
+
+def __getattr__(name: str) -> object:
+    """Lazy loading for module-level attributes."""
+    if name == "_get_data_dir":
+        return _get_data_dir
+    if name == "_load_config":
+        return _load_config
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

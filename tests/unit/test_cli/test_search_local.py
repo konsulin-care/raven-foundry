@@ -58,8 +58,10 @@ class TestSearchLocalOnly:
         mock_embedding = [0.1] * 384
 
         with (
-            patch("raven.embeddings.generate_embedding") as mock_gen_emb,
-            patch("raven.storage.embedding.search_by_embedding") as mock_search_emb,
+            patch("raven.cli.search_orchestrator.generate_embedding") as mock_gen_emb,
+            patch(
+                "raven.cli.search_orchestrator.search_by_embedding"
+            ) as mock_search_emb,
         ):
             mock_gen_emb.return_value = mock_embedding
             mock_search_emb.return_value = []
@@ -78,7 +80,7 @@ class TestSearchLocalOnly:
         """
         query = "machine learning"
 
-        with patch("raven.storage.paper.search_papers") as mock_search_papers:
+        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
             mock_search_papers.return_value = []
 
             _search_local_only(db_path, query, keyword=True)
@@ -97,8 +99,10 @@ class TestSearchLocalOnly:
         mock_embedding = [0.1] * 384
 
         with (
-            patch("raven.embeddings.generate_embedding") as mock_gen_emb,
-            patch("raven.storage.embedding.search_by_embedding") as mock_search_emb,
+            patch("raven.cli.search_orchestrator.generate_embedding") as mock_gen_emb,
+            patch(
+                "raven.cli.search_orchestrator.search_by_embedding"
+            ) as mock_search_emb,
         ):
             mock_gen_emb.return_value = mock_embedding
             mock_search_emb.return_value = []
@@ -113,7 +117,7 @@ class TestSearchLocalOnly:
         """Verify keyword search handles empty results properly."""
         query = "nonexistent topic"
 
-        with patch("raven.storage.paper.search_papers") as mock_search_papers:
+        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
             mock_search_papers.return_value = []
 
             _search_local_only(db_path, query, keyword=True)
@@ -137,8 +141,10 @@ class TestSearchLocalOnly:
         ]
 
         with (
-            patch("raven.embeddings.generate_embedding") as mock_gen_emb,
-            patch("raven.storage.embedding.search_by_embedding") as mock_search_emb,
+            patch("raven.cli.search_orchestrator.generate_embedding") as mock_gen_emb,
+            patch(
+                "raven.cli.search_orchestrator.search_by_embedding"
+            ) as mock_search_emb,
         ):
             mock_gen_emb.return_value = mock_embedding
             mock_search_emb.return_value = mock_results
@@ -161,7 +167,7 @@ class TestSearchLocalOnly:
             }
         ]
 
-        with patch("raven.storage.paper.search_papers") as mock_search_papers:
+        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
             mock_search_papers.return_value = mock_results
 
             _search_local_only(db_path, query, keyword=True)

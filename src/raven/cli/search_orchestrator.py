@@ -6,6 +6,11 @@ from typing import Any
 
 import click
 
+from raven.embeddings import generate_embedding
+from raven.ingestion import format_search_result, search_works
+from raven.storage.embedding import search_by_embedding
+from raven.storage.paper import search_papers
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,9 +54,6 @@ def _try_local_vector_then_openalex(
     sort: str,
 ) -> None:
     """Try local vector search, fallback to OpenAlex semantic."""
-    from raven.embeddings import generate_embedding
-    from raven.storage.embedding import search_by_embedding
-
     embedding = generate_embedding(query)
     results = search_by_embedding(db_path, embedding)
 
@@ -72,8 +74,6 @@ def _try_local_keyword_then_openalex(
     sort: str,
 ) -> None:
     """Try local keyword search, fallback to OpenAlex keyword."""
-    from raven.storage.paper import search_papers
-
     results = search_papers(db_path, query)
 
     if results:
@@ -87,13 +87,8 @@ def _try_local_keyword_then_openalex(
 def _search_local_only(db_path: Path, query: str, keyword: bool) -> None:
     """Search local database only (no fallback)."""
     if keyword:
-        from raven.storage.paper import search_papers
-
         results = search_papers(db_path, query)
     else:
-        from raven.embeddings import generate_embedding
-        from raven.storage.embedding import search_by_embedding
-
         embedding = generate_embedding(query)
         results = search_by_embedding(db_path, embedding)
 
@@ -134,8 +129,6 @@ def _search_openalex(
     use_semantic: bool,
 ) -> None:
     """Search OpenAlex and display results."""
-    from raven.ingestion import format_search_result, search_works
-
     result_data = search_works(
         query=query,
         filter_str=filter_str,

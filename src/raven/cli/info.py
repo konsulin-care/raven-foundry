@@ -6,6 +6,8 @@ from typing import Optional
 
 import click
 
+from raven.config import _get_data_dir, _load_config
+
 
 def _format_size(size_bytes: float) -> str:
     """Format bytes into human-readable size string."""
@@ -30,8 +32,6 @@ def _resolve_db_path(
     env_path: Optional[Path] = None, db_path: Optional[Path] = None
 ) -> Path:
     """Resolve database path with proper precedence."""
-    from raven.config import _get_data_dir, _load_config
-
     _load_config(env_path)
 
     if db_path is not None:
@@ -57,8 +57,6 @@ def _resolve_db_path(
 )
 def info(db: Optional[Path], env: Optional[Path]) -> None:
     """Show details about the current Raven configuration."""
-    from raven.config import _get_data_dir
-
     db_path = _resolve_db_path(env, db)
     data_dir = _get_data_dir()
 

@@ -60,8 +60,10 @@ class TestSearchWithFallback:
         mock_embedding = [0.1] * 384
 
         with (
-            patch("raven.embeddings.generate_embedding") as mock_gen_emb,
-            patch("raven.storage.embedding.search_by_embedding") as mock_search_emb,
+            patch("raven.cli.search_orchestrator.generate_embedding") as mock_gen_emb,
+            patch(
+                "raven.cli.search_orchestrator.search_by_embedding"
+            ) as mock_search_emb,
         ):
             mock_gen_emb.return_value = mock_embedding
             mock_search_emb.return_value = []
@@ -84,7 +86,7 @@ class TestSearchWithFallback:
         """
         query = "machine learning"
 
-        with patch("raven.storage.paper.search_papers") as mock_search_papers:
+        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
             mock_search_papers.return_value = []
 
             _search_local_only(db_path, query, keyword=True)
@@ -107,8 +109,10 @@ class TestSearchWithFallback:
         mock_embedding = [0.1] * 384
 
         with (
-            patch("raven.embeddings.generate_embedding") as mock_gen_emb,
-            patch("raven.storage.embedding.search_by_embedding") as mock_search_emb,
+            patch("raven.cli.search_orchestrator.generate_embedding") as mock_gen_emb,
+            patch(
+                "raven.cli.search_orchestrator.search_by_embedding"
+            ) as mock_search_emb,
             patch("raven.cli.search_orchestrator._search_openalex") as mock_openalex,
         ):
             mock_gen_emb.return_value = mock_embedding
@@ -141,7 +145,7 @@ class TestSearchWithFallback:
         query = "machine learning"
 
         with (
-            patch("raven.storage.paper.search_papers") as mock_search_papers,
+            patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers,
             patch("raven.cli.search_orchestrator._search_openalex") as mock_openalex,
         ):
             mock_search_papers.return_value = []  # No local results
@@ -240,8 +244,10 @@ class TestSearchOrchestratorWithResults:
         ]
 
         with (
-            patch("raven.embeddings.generate_embedding") as mock_gen_emb,
-            patch("raven.storage.embedding.search_by_embedding") as mock_search_emb,
+            patch("raven.cli.search_orchestrator.generate_embedding") as mock_gen_emb,
+            patch(
+                "raven.cli.search_orchestrator.search_by_embedding"
+            ) as mock_search_emb,
             patch("raven.cli.search_orchestrator._search_openalex") as mock_openalex,
         ):
             mock_gen_emb.return_value = mock_embedding
@@ -269,8 +275,8 @@ class TestSearchOpenAlex:
     def test_search_openalex_calls_search_works(self, capsys):
         """Verify _search_openalex calls search_works with correct params."""
         with (
-            patch("raven.ingestion.search_works") as mock_search_works,
-            patch("raven.ingestion.format_search_result") as mock_format,
+            patch("raven.cli.search_orchestrator.search_works") as mock_search_works,
+            patch("raven.cli.search_orchestrator.format_search_result") as mock_format,
         ):
             mock_search_works.return_value = {
                 "results": [{"id": 1, "title": "Test"}],
@@ -292,7 +298,7 @@ class TestSearchOpenAlex:
 
     def test_search_openalex_no_results(self, capsys):
         """Verify message when no results found."""
-        with patch("raven.ingestion.search_works") as mock_search_works:
+        with patch("raven.cli.search_orchestrator.search_works") as mock_search_works:
             mock_search_works.return_value = {
                 "results": [],
                 "meta": {},
@@ -307,8 +313,8 @@ class TestSearchOpenAlex:
     def test_search_openalex_displays_results(self, capsys):
         """Verify _search_openalex displays result metadata."""
         with (
-            patch("raven.ingestion.search_works") as mock_search_works,
-            patch("raven.ingestion.format_search_result") as mock_format,
+            patch("raven.cli.search_orchestrator.search_works") as mock_search_works,
+            patch("raven.cli.search_orchestrator.format_search_result") as mock_format,
         ):
             mock_search_works.return_value = {
                 "results": [{"id": 1}],
