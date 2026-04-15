@@ -243,7 +243,14 @@ def _print_abstract(formatted: dict) -> None:
 
 
 @cli.command()
-@click.argument("identifier")
+@click.argument("identifier", required=False)
+@click.option(
+    "--bib",
+    "-b",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    default=None,
+    help="Path to BibTeX file for batch ingestion",
+)
 @click.option(
     "--db",
     "-d",
@@ -260,15 +267,68 @@ def _print_abstract(formatted: dict) -> None:
 )
 @click.pass_context
 def ingest(
-    ctx: click.Context, identifier: str, db: Optional[Path], env: Optional[Path]
+    ctx: click.Context,
+    identifier: Optional[str],
+    bib: Optional[Path],
+    db: Optional[Path],
+    env: Optional[Path],
 ) -> None:
-    """Ingest a publication by identifier (DOI, OpenAlex ID, PMID, or MAG)."""
+    """Ingest a publication by identifier (DOI, OpenAlex ID, PMID, MAG, PMCID).
+
+    Examples:
+        raven ingest doi:10.5281/zenodo.18201069
+        raven ingest --bib references.bib
+    """
     from raven.ingestion import ingest_paper
+    from raven.ingestion.bibtex import filter_valid_entries, parse_bibtex_file
 
     db_path = _resolve_db_path(env, db)
 
     if not db_path.parent.exists():
         db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # BibTeX batch ingestion
+    if bib:
+        filename = bib.name
+
+        # Step 1: Parse bib file
+        click.echo(f"Parsing {filename} into memory")
+        entries = parse_bibtex_file(bib)
+
+        # Step 2: Filter valid entries
+        valid_entries, invalid_entries = filter_valid_entries(entries)
+        total_valid = len(valid_entries)
+        total_entries = len(entries)
+
+        click.echo(
+            f"Parsed {total_entries} entries, {total_valid} has a valid identifier"
+        )
+
+        if not valid_entries:
+            click.echo("No valid entries to ingest.")
+            return
+
+        # Step 3: Ingest with progress bar
+        with click.progressbar(
+            length=total_valid,
+            label="Ingesting",
+            show_eta=False,
+            show_percent=True,
+            show_pos=True,
+            item_show_func=lambda e: e["_identifier"] if e else "",
+        ) as bar:
+            for i, entry in enumerate(valid_entries, 1):
+                identifier = entry["_identifier"]
+                assert identifier is not None, "Valid entry must have identifier"
+                result = ingest_paper(db_path, identifier)
+                bar.update(1)
+
+        click.echo(f"Successfully ingested {total_valid} publications.")
+        return
+
+    # Single identifier ingestion
+    if not identifier:
+        raise click.UsageError("Either provide an identifier or use --bib option")
 
     click.echo(f"Ingesting: {identifier}...")
 

@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 def extract_identifier(ids: dict[str, str] | None) -> str | None:
-    """Extract identifier from OpenAlex work IDs using priority: doi > openalex > pmid > mag.
+    """Extract identifier from OpenAlex work IDs using priority: doi > openalex > pmid > pmcid > mag.
 
     Args:
-        ids: Dictionary of OpenAlex work IDs with keys like 'doi', 'openalex', 'pmid', 'mag'.
+        ids: Dictionary of OpenAlex work IDs with keys like 'doi', 'openalex', 'pmid', 'pmcid', 'mag'.
 
     Returns:
         Formatted identifier string (e.g., 'doi:10.5281/zenodo.18201069') or None if no IDs available.
@@ -45,7 +45,16 @@ def extract_identifier(ids: dict[str, str] | None) -> str | None:
         pmid_value = pmid.replace("https://pubmed.ncbi.nlm.nih.gov/", "")
         return f"pmid:{pmid_value}"
 
-    # Priority 4: MAG
+    # Priority 4: PMCID
+    pmcid = ids.get("pmcid")
+    if pmcid:
+        # Strip URL and add pmcid: prefix
+        pmcid_value = pmcid.replace(
+            "https://www.ncbi.nlm.nih.gov/pmc/articles/", ""
+        ).replace("PMC", "")
+        return f"pmcid:{pmcid_value}"
+
+    # Priority 5: MAG
     mag = ids.get("mag")
     if mag:
         # Just add mag: prefix

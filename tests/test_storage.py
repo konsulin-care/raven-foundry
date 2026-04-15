@@ -831,6 +831,17 @@ class TestExtractIdentifier:
 
         assert result == "pmid:29456894"
 
+    def test_extract_identifier_pmcid_fallback(self):
+        """extract_identifier returns pmcid: prefix when no doi/openalex/pmid but pmcid exists."""
+        ids = {
+            "mag": "2741809807",
+            "pmcid": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1234567",
+        }
+
+        result = extract_identifier(ids)
+
+        assert result == "pmcid:1234567"
+
     def test_extract_identifier_mag_fallback(self):
         """extract_identifier returns mag: prefix when no doi/openalex/pmid but mag exists."""
         ids = {"mag": "2741809807"}
