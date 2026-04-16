@@ -11,12 +11,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# DOI URL prefix constant
+_DOI_URL_PREFIX = "https://doi.org/"
+
 
 def normalize_doi(doi: str) -> str:
     """Normalize DOI by stripping URL prefixes and case normalizing."""
     doi = doi.strip().lower()
-    if doi.startswith("https://doi.org/"):
-        doi = doi.replace("https://doi.org/", "")
+    if doi.startswith(_DOI_URL_PREFIX):
+        doi = doi.replace(_DOI_URL_PREFIX, "")
     elif doi.startswith("doi:"):
         doi = doi.replace("doi:", "")
     return doi
@@ -48,9 +51,7 @@ def normalize_identifier(identifier: str) -> str:
 
     # DOI URL pattern (contains doi.org/)
     if "doi.org/" in id.lower():
-        cleaned = (
-            id.lower().replace("https://doi.org/", "").replace("http://doi.org/", "")
-        )
+        cleaned = id.lower().replace(_DOI_URL_PREFIX, "").replace("http://doi.org/", "")
         return f"doi:{cleaned}"
 
     # OpenAlex URL

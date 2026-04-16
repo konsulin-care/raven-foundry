@@ -88,6 +88,12 @@ __all__ = [
 # Re-export logger for backward compatibility
 logger = logging.getLogger(__name__)
 
+# Module path constants to avoid duplication
+_MODULE_INGESTION_API = "raven.ingestion.api"
+_MODULE_INGESTION_PIPELINE = "raven.ingestion.pipeline"
+_MODULE_INGESTION_TEXT = "raven.ingestion.text"
+_MODULE_STORAGE = "raven.storage"
+
 # Lazy loading mapping for backward compatibility
 _LAZY_IMPORTS = {
     # Config
@@ -97,15 +103,15 @@ _LAZY_IMPORTS = {
     "generate_embedding": ("raven.embeddings", "generate_embedding"),
     "generate_embeddings_batch": ("raven.embeddings", "generate_embeddings_batch"),
     # Ingestion API
-    "DEFAULT_FILTERS": ("raven.ingestion.api", "DEFAULT_FILTERS"),
-    "DEFAULT_SORT_ORDER": ("raven.ingestion.api", "DEFAULT_SORT_ORDER"),
-    "SEMANTIC_FILTERS": ("raven.ingestion.api", "SEMANTIC_FILTERS"),
+    "DEFAULT_FILTERS": (_MODULE_INGESTION_API, "DEFAULT_FILTERS"),
+    "DEFAULT_SORT_ORDER": (_MODULE_INGESTION_API, "DEFAULT_SORT_ORDER"),
+    "SEMANTIC_FILTERS": (_MODULE_INGESTION_API, "SEMANTIC_FILTERS"),
     "_create_session_with_retries": (
-        "raven.ingestion.api",
+        _MODULE_INGESTION_API,
         "_create_session_with_retries",
     ),
-    "_get_openalex_base_url": ("raven.ingestion.api", "_get_openalex_base_url"),
-    "fetch_work": ("raven.ingestion.api", "fetch_work"),
+    "_get_openalex_base_url": (_MODULE_INGESTION_API, "_get_openalex_base_url"),
+    "fetch_work": (_MODULE_INGESTION_API, "fetch_work"),
     # Identifier
     "normalize_doi": ("raven.ingestion.identifier", "normalize_doi"),
     "normalize_identifier": ("raven.ingestion.identifier", "normalize_identifier"),
@@ -113,26 +119,26 @@ _LAZY_IMPORTS = {
     "prepare_paper_info": ("raven.ingestion.metadata", "prepare_paper_info"),
     # Pipeline
     "_get_existing_paper_info": (
-        "raven.ingestion.pipeline",
+        _MODULE_INGESTION_PIPELINE,
         "_get_existing_paper_info",
     ),
-    "_handle_existing_paper": ("raven.ingestion.pipeline", "_handle_existing_paper"),
-    "ingest_paper": ("raven.ingestion.pipeline", "ingest_paper"),
-    "ingest_search_results": ("raven.ingestion.pipeline", "ingest_search_results"),
+    "_handle_existing_paper": (_MODULE_INGESTION_PIPELINE, "_handle_existing_paper"),
+    "ingest_paper": (_MODULE_INGESTION_PIPELINE, "ingest_paper"),
+    "ingest_search_results": (_MODULE_INGESTION_PIPELINE, "ingest_search_results"),
     # Search
     "search_works": ("raven.ingestion.search", "search_works"),
     "search_works_semantic": ("raven.ingestion.search", "search_works_semantic"),
     "search_works_keyword": ("raven.ingestion.search_keyword", "search_works_keyword"),
     # Text
-    "combine_title_abstract": ("raven.ingestion.text", "combine_title_abstract"),
-    "format_search_result": ("raven.ingestion.text", "format_search_result"),
-    "undo_inverted_index": ("raven.ingestion.text", "undo_inverted_index"),
+    "combine_title_abstract": (_MODULE_INGESTION_TEXT, "combine_title_abstract"),
+    "format_search_result": (_MODULE_INGESTION_TEXT, "format_search_result"),
+    "undo_inverted_index": (_MODULE_INGESTION_TEXT, "undo_inverted_index"),
     # Storage
-    "add_embedding": ("raven.storage", "add_embedding"),
-    "add_paper": ("raven.storage", "add_paper"),
-    "get_embedding_exists": ("raven.storage", "get_embedding_exists"),
-    "get_paper_id_by_identifier": ("raven.storage", "get_paper_id_by_identifier"),
-    "update_paper": ("raven.storage", "update_paper"),
+    "add_embedding": (_MODULE_STORAGE, "add_embedding"),
+    "add_paper": (_MODULE_STORAGE, "add_paper"),
+    "get_embedding_exists": (_MODULE_STORAGE, "get_embedding_exists"),
+    "get_paper_id_by_identifier": (_MODULE_STORAGE, "get_paper_id_by_identifier"),
+    "update_paper": (_MODULE_STORAGE, "update_paper"),
 }
 
 

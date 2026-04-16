@@ -8,6 +8,9 @@ import sqlite3
 
 logger = logging.getLogger(__name__)
 
+# Migration SQL constant
+_DROP_AUTHORS_COLUMN_SQL = "ALTER TABLE papers DROP COLUMN authors"
+
 
 def safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> None:
     """Safely add a column with validation and quoting.
@@ -71,7 +74,7 @@ def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
     if has_data == 0:
         # No data, just drop the column
         try:
-            conn.execute("ALTER TABLE papers DROP COLUMN authors")
+            conn.execute(_DROP_AUTHORS_COLUMN_SQL)
         except sqlite3.OperationalError:
             # SQLite 3.35.0+ required for DROP COLUMN
             pass
@@ -83,7 +86,7 @@ def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
     if migration_done > 0:
         # Already migrated, drop legacy column
         try:
-            conn.execute("ALTER TABLE papers DROP COLUMN authors")
+            conn.execute(_DROP_AUTHORS_COLUMN_SQL)
         except sqlite3.OperationalError:
             pass
         return
@@ -126,6 +129,6 @@ def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
 
     # Drop legacy authors column
     try:
-        conn.execute("ALTER TABLE papers DROP COLUMN authors")
+        conn.execute(_DROP_AUTHORS_COLUMN_SQL)
     except sqlite3.OperationalError:
         pass
