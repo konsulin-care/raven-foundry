@@ -5,9 +5,9 @@ from typing import Any, Optional
 
 import click
 
-from raven.paths import get_data_dir, load_config
 from raven.ingestion import ingest_paper
 from raven.ingestion.bibtex import filter_valid_entries, parse_bibtex_file
+from raven.paths import get_data_dir, load_config
 
 
 def _resolve_db_path(

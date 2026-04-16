@@ -1,7 +1,5 @@
 """Configuration module for Raven - loads environment variables from .env file."""
 
-from pathlib import Path
-
 from raven.paths import find_env_file, get_data_dir, load_config
 
 # Default values

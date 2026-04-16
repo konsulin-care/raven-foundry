@@ -6,8 +6,8 @@ from typing import Optional
 import click
 
 from raven.cli.search_orchestrator import search_with_fallback
-from raven.paths import get_data_dir, load_config
 from raven.ingestion import DEFAULT_SORT_ORDER
+from raven.paths import get_data_dir, load_config
 
 
 def _resolve_db_path(
