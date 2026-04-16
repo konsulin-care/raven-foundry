@@ -114,27 +114,60 @@ def search_by_embedding(
         query_json = json.dumps(query_embedding)
         conn.row_factory = sqlite3.Row
 
+        # Check if normalized author tables exist
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+        table_names = {t[0] for t in tables}
+
         # Use top-k mode - returns sorted results by distance
-        cursor = conn.execute(
-            """
-            SELECT
-                p.id,
-                p.identifier,
-                p.title,
-                p.authors,
-                p.abstract,
-                p.publication_year,
-                p.venue,
-                p.type,
-                v.distance
-            FROM embeddings e
-            JOIN papers p ON e.paper_id = p.id
-            JOIN vector_full_scan('embeddings', 'embedding', vector_as_f32(?), ?) AS v
-            ON e.paper_id = v.rowid
-            ORDER BY v.distance
+        # Authors are fetched from normalized schema or legacy column
+        if "authors" in table_names and "paper_authors" in table_names:
+            cursor = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.identifier,
+                    p.title,
+                    p.abstract,
+                    p.publication_year,
+                    p.venue,
+                    p.type,
+                    GROUP_CONCAT(a.name, ', ') AS authors,
+                    v.distance
+                FROM embeddings e
+                JOIN papers p ON e.paper_id = p.id
+                LEFT JOIN paper_authors pa ON p.id = pa.paper_id
+                LEFT JOIN authors a ON pa.author_id = a.id
+                JOIN vector_full_scan('embeddings', 'embedding', vector_as_f32(?), ?) AS v
+                ON e.paper_id = v.rowid
+                GROUP BY p.id
+                ORDER BY v.distance
             """,
-            (query_json, top_k),
-        )
+                (query_json, top_k),
+            )
+        else:
+            # Fallback to legacy authors column
+            cursor = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.identifier,
+                    p.title,
+                    p.authors,
+                    p.abstract,
+                    p.publication_year,
+                    p.venue,
+                    p.type,
+                    v.distance
+                FROM embeddings e
+                JOIN papers p ON e.paper_id = p.id
+                JOIN vector_full_scan('embeddings', 'embedding', vector_as_f32(?), ?) AS v
+                ON e.paper_id = v.rowid
+                ORDER BY v.distance
+            """,
+                (query_json, top_k),
+            )
 
         results = [dict(row) for row in cursor.fetchall()]
 

@@ -47,7 +47,6 @@ class TestInitDatabase:
             "id",
             "identifier",
             "title",
-            "authors",
             "abstract",
             "publication_year",
             "venue",
@@ -55,4 +54,6 @@ class TestInitDatabase:
             "created_at",
             "openalex_id",
         }
+        # Note: 'authors' column is migrated to normalized schema
+        # The new tables 'authors' and 'paper_authors' should exist
         assert expected_columns.issubset(columns)

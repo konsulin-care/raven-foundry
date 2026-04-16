@@ -4,6 +4,7 @@ Rules:
 - Enforce DOI uniqueness
 - Use WAL mode for durability
 - Maintain indexes on DOI, type, title
+- Normalized author schema (authors table + paper_authors junction table)
 """
 
 import contextlib
@@ -80,6 +81,93 @@ def _safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> 
 
     # Execute with quoted identifier to prevent SQL injection
     conn.execute(f"ALTER TABLE papers ADD COLUMN [{col_name}] {col_type}")
+
+
+def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
+    """Migrate legacy TEXT authors column to normalized schema.
+
+    This migration:
+    1. Parses comma-separated author names from legacy 'authors' column
+    2. Inserts into 'authors' table (with generated ID, null orcid)
+    3. Creates junction entries in 'paper_authors'
+    4. Drops legacy 'authors' column from papers table
+
+    Args:
+        conn: SQLite connection.
+    """
+    # Check if papers table has the legacy authors column with data
+    columns_result = conn.execute("PRAGMA table_info('papers')").fetchall()
+    paper_columns = {row[1] for row in columns_result}
+
+    if "authors" not in paper_columns:
+        return  # No legacy column to migrate
+
+    # Check if there's any data in the authors column
+    has_data = conn.execute(
+        "SELECT COUNT(*) FROM papers WHERE authors IS NOT NULL AND authors != ''"
+    ).fetchone()[0]
+
+    if has_data == 0:
+        # No data, just drop the column
+        try:
+            conn.execute("ALTER TABLE papers DROP COLUMN authors")
+        except sqlite3.OperationalError:
+            # SQLite 3.35.0+ required for DROP COLUMN
+            pass
+        return
+
+    # Migration flag: track if we've already migrated
+    migration_done = conn.execute("SELECT COUNT(*) FROM paper_authors").fetchone()[0]
+
+    if migration_done > 0:
+        # Already migrated, drop legacy column
+        try:
+            conn.execute("ALTER TABLE papers DROP COLUMN authors")
+        except sqlite3.OperationalError:
+            pass
+        return
+
+    # Perform migration: parse comma-separated authors
+    papers_with_authors = conn.execute(
+        """
+        SELECT id, authors FROM papers
+        WHERE authors IS NOT NULL AND authors != ''
+        """
+    ).fetchall()
+
+    for paper_id, authors_text in papers_with_authors:
+        # Parse comma-separated author names
+        author_names = [n.strip() for n in authors_text.split(",") if n.strip()]
+
+        for order, name in enumerate(author_names):
+            # Generate a stable ID from the name (hash-based for uniqueness)
+            import hashlib
+
+            author_id = "A" + hashlib.md5(name.encode()).hexdigest()[:10].upper()
+
+            # Insert into authors table
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO authors (id, orcid, name)
+                VALUES (?, NULL, ?)
+                """,
+                (author_id, name),
+            )
+
+            # Insert into junction table
+            conn.execute(
+                """
+                INSERT INTO paper_authors (paper_id, author_id, author_order, is_corresponding)
+                VALUES (?, ?, ?, 0)
+                """,
+                (paper_id, author_id, order),
+            )
+
+    # Drop legacy authors column
+    try:
+        conn.execute("ALTER TABLE papers DROP COLUMN authors")
+    except sqlite3.OperationalError:
+        pass
 
 
 def init_database(db_path: Path) -> None:
@@ -179,5 +267,36 @@ def init_database(db_path: Path) -> None:
         except sqlite3.OperationalError as e:
             # Extension not available - log error and continue
             logger.warning("Failed to create embeddings table: %s", e)
+
+        # Create normalized authors table (OpenAlex author data)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS authors (
+                id TEXT PRIMARY KEY,
+                orcid TEXT UNIQUE,
+                name TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_authors_orcid ON authors(orcid)
+        """)
+
+        # Create paper_authors junction table (many-to-many relationship)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS paper_authors (
+                paper_id INTEGER,
+                author_id TEXT,
+                author_order INTEGER,
+                is_corresponding INTEGER DEFAULT 0,
+                PRIMARY KEY (paper_id, author_id),
+                FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE,
+                FOREIGN KEY (author_id) REFERENCES authors(id)
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_paper_authors_author ON paper_authors(author_id)
+        """)
+
+        # Migration: Migrate existing TEXT authors to normalized schema
+        _migrate_authors_to_normalized(conn)
 
         conn.commit()

@@ -11,6 +11,40 @@ from typing import Any
 from raven.ingestion.text import combine_title_abstract, undo_inverted_index
 
 
+def _extract_author_data(authorship: dict[str, Any], order: int) -> dict[str, Any]:
+    """Extract author data from OpenAlex authorship.
+
+    Args:
+        authorship: Single authorship dict from OpenAlex work.
+        order: Author order in the paper.
+
+    Returns:
+        Dict with author fields: id, name, orcid, is_corresponding, order.
+    """
+    author = authorship.get("author", {})
+
+    # Extract author ID (remove URL prefix)
+    author_id = author.get("id", "")
+    if author_id:
+        author_id = author_id.replace("https://openalex.org/", "")
+
+    # Extract ORCID (remove URL prefix)
+    orcid = author.get("orcid", "")
+    if orcid:
+        orcid = orcid.replace("https://orcid.org/", "")
+
+    name = author.get("display_name", "")
+    is_corresponding = 1 if authorship.get("is_corresponding") else 0
+
+    return {
+        "id": author_id,
+        "name": name,
+        "orcid": orcid if orcid else None,
+        "is_corresponding": is_corresponding,
+        "order": order,
+    }
+
+
 def _extract_paper_metadata(work: dict[str, Any]) -> dict[str, Any]:
     """Extract metadata fields from OpenAlex work.
 
@@ -34,12 +68,15 @@ def _extract_paper_metadata(work: dict[str, Any]) -> dict[str, Any]:
     if abstract_inverted:
         abstract = undo_inverted_index(abstract_inverted)
 
-    # Reconstruct authors from authorship data
-    authors_list = work.get("authorships", [])
-    authors = (
-        ", ".join(a.get("author", {}).get("display_name", "") for a in authors_list)
-        or None
-    )
+    # Extract authordata from authorship
+    authors_data = []
+    for idx, auth in enumerate(work.get("authorships", [])):
+        author_info = _extract_author_data(auth, idx)
+        if author_info["name"]:  # Only add if name exists
+            authors_data.append(author_info)
+
+    # For backward compatibility, also create comma-separated string
+    authors = ", ".join(a["name"] for a in authors_data) or None
 
     return {
         "identifier": identifier,
@@ -47,6 +84,7 @@ def _extract_paper_metadata(work: dict[str, Any]) -> dict[str, Any]:
         "paper_type": work.get("type", "article"),
         "abstract": abstract,
         "authors": authors,
+        "authors_data": authors_data,
         "publication_year": work.get("publication_year"),
         "venue": work.get("host_venue", {}).get("display_name"),
         "openalex_id": work.get("id"),
@@ -74,6 +112,7 @@ def _prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
         "identifier": metadata.get("identifier"),
         "title": title,
         "authors": metadata.get("authors"),
+        "authors_data": metadata.get("authors_data"),
         "abstract": abstract,
         "publication_year": metadata.get("publication_year"),
         "venue": metadata.get("venue"),
