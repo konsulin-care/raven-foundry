@@ -136,8 +136,7 @@ class TestPreparePaperInfo:
         assert paper_info["identifier"] == "doi:10.1234/test"
         assert paper_info["title"] == "Test Paper"
         assert paper_info["paper_type"] == "article"
-        assert paper_info["publication_year"] == 2024
-        assert paper_info["openalex_id"] == "https://openalex.org/W123"
+        assert paper_info["year"] == 2024
         assert embedding_text == "Test Paper"
 
     def test_extracts_authors(self):
@@ -165,7 +164,7 @@ class TestPreparePaperInfo:
 
         paper_info, _ = prepare_paper_info(work)
 
-        assert paper_info["venue"] == "Test Journal"
+        assert paper_info["source"] == "Test Journal"
 
     def test_extracts_openalex_id_fallback(self):
         """Falls back to openalex ID when no DOI available."""
@@ -194,6 +193,6 @@ class TestPreparePaperInfo:
         assert paper_info["title"] == "Test Paper"
         assert paper_info["authors"] is None
         assert paper_info["abstract"] == ""
-        assert paper_info["venue"] is None
+        assert paper_info["source"] is None
         assert paper_info["paper_type"] == "article"
         assert embedding_text == "Test Paper"

@@ -65,15 +65,14 @@ def init_database(db_path: Path) -> None:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS papers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                openalex_id TEXT UNIQUE,
                 identifier TEXT UNIQUE NOT NULL COLLATE NOCASE,
                 title TEXT NOT NULL,
                 authors TEXT,
                 abstract TEXT,
-                publication_year INTEGER,
-                venue TEXT,
+                year INTEGER,
+                source TEXT,
                 type TEXT DEFAULT 'article',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
@@ -85,9 +84,8 @@ def init_database(db_path: Path) -> None:
         columns_to_add = {
             "authors": "TEXT",
             "abstract": "TEXT",
-            "publication_year": "INTEGER",
-            "venue": "TEXT",
-            "openalex_id": "TEXT",
+            "year": "INTEGER",
+            "source": "TEXT",
             "identifier": "TEXT",
             "type": "TEXT",
         }
@@ -115,9 +113,6 @@ def init_database(db_path: Path) -> None:
             conn.execute("ALTER TABLE papers DROP COLUMN doi")
 
         conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_openalex_id ON papers(openalex_id)"
-        )
-        conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_identifier ON papers(identifier COLLATE NOCASE)"
         )
 
@@ -130,7 +125,7 @@ def init_database(db_path: Path) -> None:
         """)
 
         conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(publication_year)
+            CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(year)
         """)
 
         # Create vector embeddings table using sqliteai-vector (sqliteai-vector package)
@@ -139,7 +134,9 @@ def init_database(db_path: Path) -> None:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS embeddings (
                     paper_id INTEGER PRIMARY KEY,
-                    embedding BLOB
+                    embedding BLOB,
+                    text TEXT,
+                    type TEXT
                 )
             """)
             conn.execute("""

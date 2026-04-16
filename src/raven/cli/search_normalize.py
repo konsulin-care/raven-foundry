@@ -28,7 +28,7 @@ def normalize_local_result(
     return {
         "title": paper.get("title", "Untitled"),
         "identifier": paper.get("identifier"),
-        "publication_year": paper.get("publication_year"),
+        "year": paper.get("year"),
         "type": paper.get("type", "article"),
         "abstract": paper.get("abstract"),
         "source": "local",
@@ -65,7 +65,7 @@ def normalize_openalex(
         formatted = {
             "title": work.get("title", "Untitled"),
             "identifier": work.get("identifier"),
-            "publication_year": work.get("publication_year"),
+            "year": work.get("publication_year"),
             "type": work.get("type", "article"),
             "abstract": work.get("abstract"),
             "relevance_score": work.get("relevance_score", 0.0),
@@ -84,7 +84,7 @@ def normalize_openalex(
     return {
         "title": formatted.get("title", "Untitled"),
         "identifier": formatted.get("identifier"),
-        "publication_year": formatted.get("publication_year"),
+        "year": formatted.get("publication_year"),
         "type": formatted.get("type", "article"),
         "abstract": formatted.get("abstract"),
         "authors": work.get("authorships"),

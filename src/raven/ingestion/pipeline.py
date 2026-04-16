@@ -65,6 +65,7 @@ def _store_paper_with_embedding(
     db_path: Path,
     paper_info: dict[str, Any],
     embedding: list[float] | None,
+    embedding_text: str | None = None,
 ) -> int:
     """Store paper and its embedding in database."""
     identifier = paper_info.get("identifier")
@@ -86,9 +87,9 @@ def _store_paper_with_embedding(
         logger.info("Adding new paper with identifier N/A")
         paper_id = add_paper(db_path, **paper_info)
 
-    if embedding is not None:
+    if embedding is not None and embedding_text is not None:
         try:
-            add_embedding(db_path, paper_id, embedding)
+            add_embedding(db_path, paper_id, embedding, embedding_text, "title")
         except Exception as e:
             logger.warning("Failed to store embedding: %s", e)
 
@@ -118,20 +119,22 @@ def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
         "title": title,
         "authors": metadata["authors"],
         "abstract": abstract,
-        "publication_year": metadata["publication_year"],
-        "venue": metadata["venue"],
-        "openalex_id": metadata["openalex_id"],
+        "year": metadata.get("publication_year"),
+        "source": metadata.get("venue"),
         "paper_type": paper_type,
     }
 
     embedding = None
+    embedding_text = None
     try:
         embedding_text = combine_title_abstract(title, abstract)
         embedding = generate_embedding(embedding_text)
     except Exception as e:
         logger.warning("Failed to generate embedding: %s", e)
 
-    paper_id = _store_paper_with_embedding(db_path, paper_info, embedding)
+    paper_id = _store_paper_with_embedding(
+        db_path, paper_info, embedding, embedding_text
+    )
 
     return {
         "paper_id": paper_id,
@@ -165,9 +168,11 @@ def ingest_search_results(
         logger.warning("Failed to generate embeddings: %s", e)
 
     ingested = []
-    for i, (paper_info, _) in enumerate(papers_data):
+    for i, (paper_info, embedding_text) in enumerate(papers_data):
         embedding = embeddings[i] if embeddings is not None else None
-        paper_id = _store_paper_with_embedding(db_path, paper_info, embedding)
+        paper_id = _store_paper_with_embedding(
+            db_path, paper_info, embedding, embedding_text
+        )
 
         ingested.append(
             {

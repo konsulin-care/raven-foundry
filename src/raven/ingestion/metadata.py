@@ -85,9 +85,8 @@ def extract_paper_metadata(work: dict[str, Any]) -> dict[str, Any]:
         "abstract": abstract,
         "authors": authors,
         "authors_data": authors_data,
-        "publication_year": work.get("publication_year"),
-        "venue": work.get("host_venue", {}).get("display_name"),
-        "openalex_id": work.get("id"),
+        "year": work.get("publication_year"),
+        "source": work.get("host_venue", {}).get("display_name"),
     }
 
 
@@ -114,9 +113,8 @@ def prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
         "authors": metadata.get("authors"),
         "authors_data": metadata.get("authors_data"),
         "abstract": abstract,
-        "publication_year": metadata.get("publication_year"),
-        "venue": metadata.get("venue"),
-        "openalex_id": metadata.get("openalex_id"),
+        "year": metadata.get("year"),
+        "source": metadata.get("source"),
         "paper_type": metadata.get("paper_type", "article"),
     }
 

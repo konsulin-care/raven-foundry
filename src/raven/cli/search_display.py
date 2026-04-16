@@ -18,7 +18,7 @@ def format_json_result(result: dict[str, Any]) -> dict[str, Any]:
     output = {
         "title": result.get("title"),
         "identifier": result.get("identifier"),
-        "year": result.get("publication_year"),
+        "year": result.get("year"),
         "type": result.get("type"),
         "abstract": result.get("abstract"),
         "source": result.get("source"),
@@ -28,8 +28,6 @@ def format_json_result(result: dict[str, Any]) -> dict[str, Any]:
     # Add optional fields if present
     if result.get("authors"):
         output["authors"] = result.get("authors")
-    if result.get("venue"):
-        output["venue"] = result.get("venue")
     if result.get("cited_by_count"):
         output["cited_by_count"] = result.get("cited_by_count")
     if result.get("open_access"):
@@ -103,7 +101,7 @@ def display_text(
 
         if identifier := paper.get("identifier"):
             click.echo(f"   Identifier: {identifier}")
-        if year := paper.get("publication_year"):
+        if year := paper.get("year"):
             click.echo(f"   Year: {year}")
         click.echo(f"   Type: {paper.get('type', 'unknown')}")
         click.echo(f"   Source: {paper.get('source', 'unknown')}")

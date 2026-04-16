@@ -22,15 +22,14 @@ class TestSearchPapersWithFixture:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    openalex_id TEXT UNIQUE,
                     identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
-                    publication_year INTEGER,
-                    venue TEXT,
+                    year INTEGER,
+                    source TEXT,
                     type TEXT DEFAULT 'article',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.execute(

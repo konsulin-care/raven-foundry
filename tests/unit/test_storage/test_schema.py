@@ -26,15 +26,14 @@ class TestDatabaseWithFixture:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    openalex_id TEXT UNIQUE,
                     identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
-                    publication_year INTEGER,
-                    venue TEXT,
+                    year INTEGER,
+                    source TEXT,
                     type TEXT DEFAULT 'article',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.execute(
@@ -42,9 +41,7 @@ class TestDatabaseWithFixture:
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_type ON papers(type)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title)")
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(publication_year)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(year)")
             # Use regular table instead of vec0 for testing
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS embeddings (
@@ -68,11 +65,10 @@ class TestDatabaseWithFixture:
             "title",
             "authors",
             "abstract",
-            "publication_year",
-            "venue",
+            "year",
+            "source",
             "type",
-            "created_at",
-            "openalex_id",
+            "ingested_at",
         }
         assert expected.issubset(columns)
 

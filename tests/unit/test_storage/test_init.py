@@ -48,11 +48,10 @@ class TestInitDatabase:
             "identifier",
             "title",
             "abstract",
-            "publication_year",
-            "venue",
+            "year",
+            "source",
             "type",
-            "created_at",
-            "openalex_id",
+            "ingested_at",
         }
         # Note: 'authors' column is migrated to normalized schema
         # The new tables 'authors' and 'paper_authors' should exist

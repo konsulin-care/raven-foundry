@@ -31,7 +31,7 @@ def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
         if "authors" in table_names and "paper_authors" in table_names:
             cursor = conn.execute(
                 """SELECT p.id, p.identifier, p.title, p.abstract,
-                   p.publication_year, p.venue, p.type,
+                   p.year, p.source, p.type, p.ingested_at,
                    GROUP_CONCAT(a.name, ', ') AS authors
                    FROM papers p
                    LEFT JOIN paper_authors pa ON p.id = pa.paper_id
@@ -43,7 +43,7 @@ def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
         else:
             cursor = conn.execute(
                 """SELECT id, identifier, title, authors, abstract,
-                   publication_year, venue, type
+                   year, source, type, ingested_at
                    FROM papers
                    WHERE LOWER(title) LIKE LOWER(?) OR LOWER(identifier) LIKE LOWER(?)
                    LIMIT 50""",

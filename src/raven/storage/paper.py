@@ -41,9 +41,8 @@ def add_paper(
     authors: str | None = None,
     authors_data: list[dict[str, Any]] | None = None,
     abstract: str | None = None,
-    publication_year: int | None = None,
-    venue: str | None = None,
-    openalex_id: str | None = None,
+    year: int | None = None,
+    source: str | None = None,
 ) -> int:
     """Add a paper to the database.
 
@@ -55,9 +54,8 @@ def add_paper(
         authors: Comma-separated list of authors (deprecated, use authors_data).
         authors_data: List of author data dicts with keys: id, name, orcid, is_corresponding, order (optional).
         abstract: Paper abstract (optional).
-        publication_year: Year of publication (optional).
-        venue: Publication venue/journal (optional).
-        openalex_id: OpenAlex ID for the paper (optional).
+        year: Year of publication (optional).
+        source: Publication source/journal (optional).
 
     Returns:
         The ID of the newly inserted paper.
@@ -88,31 +86,29 @@ def add_paper(
             if has_authors_col:
                 cursor = conn.execute(
                     """INSERT INTO papers (identifier, title, authors, abstract,
-                       publication_year, venue, openalex_id, type)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                       year, source, type)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (
                         identifier_value,
                         title,
                         authors_str,
                         abstract,
-                        publication_year,
-                        venue,
-                        openalex_id,
+                        year,
+                        source,
                         paper_type,
                     ),
                 )
             else:
                 cursor = conn.execute(
                     """INSERT INTO papers (identifier, title, abstract,
-                       publication_year, venue, openalex_id, type)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       year, source, type)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
                     (
                         identifier_value,
                         title,
                         abstract,
-                        publication_year,
-                        venue,
-                        openalex_id,
+                        year,
+                        source,
                         paper_type,
                     ),
                 )
@@ -144,9 +140,8 @@ def update_paper(
     authors: str | None = None,
     authors_data: list[dict[str, Any]] | None = None,
     abstract: str | None = None,
-    publication_year: int | None = None,
-    venue: str | None = None,
-    openalex_id: str | None = None,
+    year: int | None = None,
+    source: str | None = None,
     paper_type: str = "article",
 ) -> None:
     """Update an existing paper's metadata."""
@@ -156,14 +151,13 @@ def update_paper(
 
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         conn.execute(
-            """UPDATE papers SET title=?, abstract=?, publication_year=?,
-               venue=?, openalex_id=?, type=? WHERE id=?""",
+            """UPDATE papers SET title=?, abstract=?, year=?,
+               source=?, type=? WHERE id=?""",
             (
                 title,
                 abstract,
-                publication_year,
-                venue,
-                openalex_id,
+                year,
+                source,
                 paper_type,
                 paper_id,
             ),

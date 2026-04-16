@@ -36,13 +36,21 @@ def get_embedding_exists(db_path: Path, paper_id: int) -> bool:
         return cursor.fetchone() is not None
 
 
-def add_embedding(db_path: Path, paper_id: int, embedding: list[float]) -> None:
+def add_embedding(
+    db_path: Path,
+    paper_id: int,
+    embedding: list[float],
+    text: str,
+    type: str,
+) -> None:
     """Add vector embedding for a paper.
 
     Args:
         db_path: Path to the SQLite database file.
         paper_id: ID of the paper to associate the embedding with.
         embedding: 384-dimensional embedding vector.
+        text: Original text being embedded.
+        type: Type of text (one of: title, abstract, abstract chunk, full text summary, section summary, section chunk).
 
     Raises:
         ValueError: If the embedding vector length doesn't match expected dimension.
@@ -67,8 +75,8 @@ def add_embedding(db_path: Path, paper_id: int, embedding: list[float]) -> None:
         # Insert embedding using vector_as_f32 for proper formatting
         embedding_json = json.dumps(embedding)
         conn.execute(
-            "INSERT OR REPLACE INTO embeddings (paper_id, embedding) VALUES (?, vector_as_f32(?))",
-            (paper_id, embedding_json),
+            "INSERT OR REPLACE INTO embeddings (paper_id, embedding, text, type) VALUES (?, vector_as_f32(?), ?, ?)",
+            (paper_id, embedding_json, text, type),
         )
         conn.commit()
 
@@ -130,9 +138,12 @@ def search_by_embedding(
                     p.identifier,
                     p.title,
                     p.abstract,
-                    p.publication_year,
-                    p.venue,
+                    p.year,
+                    p.source,
                     p.type,
+                    p.ingested_at,
+                    e.text,
+                    e.type AS embedding_type,
                     GROUP_CONCAT(a.name, ', ') AS authors,
                     v.distance
                 FROM embeddings e
@@ -156,9 +167,12 @@ def search_by_embedding(
                     p.title,
                     p.authors,
                     p.abstract,
-                    p.publication_year,
-                    p.venue,
+                    p.year,
+                    p.source,
                     p.type,
+                    p.ingested_at,
+                    e.text,
+                    e.type AS embedding_type,
                     v.distance
                 FROM embeddings e
                 JOIN papers p ON e.paper_id = p.id

@@ -28,11 +28,11 @@ def safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> N
         {
             "authors",
             "abstract",
-            "publication_year",
-            "venue",
-            "openalex_id",
+            "year",
+            "source",
             "identifier",
             "type",
+            "ingested_at",
         }
     )
 

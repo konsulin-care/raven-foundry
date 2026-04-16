@@ -22,15 +22,14 @@ class TestAddPaperWithFixture:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS papers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    openalex_id TEXT UNIQUE,
                     identifier TEXT COLLATE NOCASE NOT NULL,
                     title TEXT NOT NULL,
                     authors TEXT,
                     abstract TEXT,
-                    publication_year INTEGER,
-                    venue TEXT,
+                    year INTEGER,
+                    source TEXT,
                     type TEXT DEFAULT 'article',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.execute(
@@ -52,7 +51,7 @@ class TestAddPaperWithFixture:
             identifier="doi:10.1234/test",
             title="Test Paper",
             authors="John Doe",
-            publication_year=2024,
+            year=2024,
         )
 
         assert isinstance(paper_id, int)
@@ -94,9 +93,8 @@ class TestAddPaperWithFixture:
             title="Full Test Paper",
             authors="John Doe, Jane Smith",
             abstract="Test abstract",
-            publication_year=2024,
-            venue="Test Journal",
-            openalex_id="https://openalex.org/W123",
+            year=2024,
+            source="Test Journal",
             paper_type="article",
         )
 
@@ -109,7 +107,6 @@ class TestAddPaperWithFixture:
         assert row["title"] == "Full Test Paper"
         assert row["authors"] == "John Doe, Jane Smith"
         assert row["abstract"] == "Test abstract"
-        assert row["publication_year"] == 2024
-        assert row["venue"] == "Test Journal"
-        assert row["openalex_id"] == "https://openalex.org/W123"
+        assert row["year"] == 2024
+        assert row["source"] == "Test Journal"
         assert row["type"] == "article"

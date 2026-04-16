@@ -78,7 +78,13 @@ class TestIngestPaper:
         )
         mock_add_paper.assert_called_once()
         mock_generate_embedding.assert_called_once_with("Test Paper")
-        mock_add_embedding.assert_called_once_with(db_path, 42, [0.1] * 384)
+        mock_add_embedding.assert_called_once()
+        call_args = mock_add_embedding.call_args
+        assert call_args[0][0] == db_path
+        assert call_args[0][1] == 42
+        assert call_args[0][2] == [0.1] * 384
+        assert call_args[0][3] == "Test Paper"
+        assert call_args[0][4] == "title"
 
     @patch("raven.storage.add_embedding")
     @patch("raven.ingestion.pipeline.generate_embedding")
