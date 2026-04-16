@@ -249,6 +249,38 @@ def get_paper_id_by_doi(db_path: Path, doi: str | None) -> int | None:
     return get_paper_id_by_identifier(db_path, f"doi:{identifier}")
 
 
+def _convert_authors_to_data(
+    authors: str | None,
+) -> list[dict[str, Any]] | None:
+    """Convert comma-separated authors string to structured data.
+
+    Args:
+        authors: Comma-separated author names string.
+
+    Returns:
+        List of author dicts with id, name, orcid, is_corresponding, order.
+    """
+    if not authors:
+        return None
+
+    import hashlib
+
+    author_names = [n.strip() for n in authors.split(",") if n.strip()]
+    authors_data = []
+    for idx, name in enumerate(author_names):
+        author_id = "A" + hashlib.md5(name.encode()).hexdigest()[:10].upper()
+        authors_data.append(
+            {
+                "id": author_id,
+                "name": name,
+                "orcid": None,
+                "is_corresponding": 0,
+                "order": idx,
+            }
+        )
+    return authors_data
+
+
 def add_paper(
     db_path: Path,
     identifier: str | None,
@@ -283,21 +315,7 @@ def add_paper(
     """
     # Backward compatibility: convert authors string to authors_data
     if authors_data is None and authors:
-        import hashlib
-
-        author_names = [n.strip() for n in authors.split(",") if n.strip()]
-        authors_data = []
-        for idx, name in enumerate(author_names):
-            author_id = "A" + hashlib.md5(name.encode()).hexdigest()[:10].upper()
-            authors_data.append(
-                {
-                    "id": author_id,
-                    "name": name,
-                    "orcid": None,
-                    "is_corresponding": 0,
-                    "order": idx,
-                }
-            )
+        authors_data = _convert_authors_to_data(authors)
 
     # Build comma-separated authors string for backward compatibility
     authors_str = None
@@ -396,21 +414,7 @@ def update_paper(
     """
     # Backward compatibility: convert authors string to authors_data
     if authors_data is None and authors:
-        import hashlib
-
-        author_names = [n.strip() for n in authors.split(",") if n.strip()]
-        authors_data = []
-        for idx, name in enumerate(author_names):
-            author_id = "A" + hashlib.md5(name.encode()).hexdigest()[:10].upper()
-            authors_data.append(
-                {
-                    "id": author_id,
-                    "name": name,
-                    "orcid": None,
-                    "is_corresponding": 0,
-                    "order": idx,
-                }
-            )
+        authors_data = _convert_authors_to_data(authors)
 
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         conn.execute(

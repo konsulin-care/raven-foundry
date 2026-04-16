@@ -25,6 +25,39 @@ from raven.ingestion.api import (
 logger = logging.getLogger(__name__)
 
 
+def _get_search_client() -> tuple[str, Any, Any]:
+    """Get common search client components.
+
+    Returns:
+        Tuple of (api_key, base_url, session).
+    """
+    api_key = get_openalex_api_key()
+    base_url = _get_openalex_base_url()
+    session = _create_session_with_retries()
+    return api_key, base_url, session
+
+
+def _parse_search_response(response: Any, search_type: str) -> dict[str, Any]:
+    """Parse OpenAlex search response.
+
+    Args:
+        response: Requests response object.
+        search_type: Type of search ('semantic' or 'keyword').
+
+    Returns:
+        Parsed response dict with search_type.
+    """
+    if response.status_code != 200:
+        logger.error(
+            "OpenAlex %s search error: status %s", search_type, response.status_code
+        )
+        return {"results": [], "meta": {"count": 0}, "search_type": search_type}
+
+    data: dict[str, Any] = response.json()
+    data["search_type"] = search_type
+    return data
+
+
 def search_works(
     query: str,
     filter_str: str | None = None,
@@ -50,10 +83,7 @@ def search_works(
     """
     from raven.ingestion.api import DEFAULT_FILTERS
 
-    api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
-
-    session = _create_session_with_retries()
+    api_key, base_url, session = _get_search_client()
 
     # Try semantic search first if enabled
     if use_semantic:
@@ -111,14 +141,7 @@ def search_works(
 
     try:
         response = session.get(url, params=keyword_params, timeout=30)
-
-        if response.status_code != 200:
-            logger.error("OpenAlex search error: status %s", response.status_code)
-            return {"results": [], "meta": {"count": 0}, "search_type": search_type}
-
-        keyword_data: dict[str, Any] = response.json()
-        keyword_data["search_type"] = search_type
-        return keyword_data
+        return _parse_search_response(response, search_type)
 
     except requests.exceptions.RequestException as e:
         logger.error("Network error during search: %s", e)
@@ -146,15 +169,13 @@ def search_works_keyword(
     """
     from raven.ingestion.api import DEFAULT_FILTERS
 
-    api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
+    api_key, base_url, session = _get_search_client()
 
     filters = [DEFAULT_FILTERS]
     if filter_str:
         filters.append(filter_str)
     combined_filter = ",".join(filters)
 
-    session = _create_session_with_retries()
     url = f"{base_url}/works"
     params: dict[str, Any] = {
         "search": _parse_search_query(query),
@@ -167,16 +188,7 @@ def search_works_keyword(
 
     try:
         response = session.get(url, params=params, timeout=30)
-
-        if response.status_code != 200:
-            logger.error(
-                "OpenAlex keyword search error: status %s", response.status_code
-            )
-            return {"results": [], "meta": {"count": 0}, "search_type": "keyword"}
-
-        data: dict[str, Any] = response.json()
-        data["search_type"] = "keyword"
-        return data
+        return _parse_search_response(response, "keyword")
 
     except requests.exceptions.RequestException as e:
         logger.error("Network error during keyword search: %s", e)
@@ -200,10 +212,8 @@ def search_works_semantic(
     """
     _rate_limit_semantic()
 
-    api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
+    api_key, base_url, session = _get_search_client()
 
-    session = _create_session_with_retries()
     url = f"{base_url}/works"
     params: dict[str, Any] = {
         "search.semantic": query,
@@ -215,16 +225,7 @@ def search_works_semantic(
 
     try:
         response = session.get(url, params=params, timeout=30)
-
-        if response.status_code != 200:
-            logger.error(
-                "OpenAlex semantic search error: status %s", response.status_code
-            )
-            return {"results": [], "meta": {"count": 0}, "search_type": "semantic"}
-
-        data: dict[str, Any] = response.json()
-        data["search_type"] = "semantic"
-        return data
+        return _parse_search_response(response, "semantic")
 
     except requests.exceptions.RequestException as e:
         logger.error("Network error during semantic search: %s", e)

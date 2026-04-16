@@ -149,10 +149,28 @@ def _fetch_openalex_results(
     return [_normalize_openalex(r) for r in results]
 
 
-def _normalize_local_vector(paper: dict[str, Any]) -> dict[str, Any]:
-    """Normalize local vector search result."""
-    distance = paper.get("distance", 1.0)
-    similarity = 1.0 - distance
+def _normalize_local_result(
+    paper: dict[str, Any], use_vector: bool = False
+) -> dict[str, Any]:
+    """Normalize local search result.
+
+    Args:
+        paper: Paper dictionary from local search.
+        use_vector: If True, calculate similarity from distance.
+                  If False, use fixed keyword search scores.
+
+    Returns:
+        Normalized paper dictionary.
+    """
+    if use_vector:
+        distance = paper.get("distance", 1.0)
+        similarity = 1.0 - distance
+        relevance_score = similarity * 1000
+        original_score = similarity
+    else:
+        relevance_score = 500
+        original_score = 0.5
+
     return {
         "title": paper.get("title", "Untitled"),
         "identifier": paper.get("identifier"),
@@ -160,23 +178,20 @@ def _normalize_local_vector(paper: dict[str, Any]) -> dict[str, Any]:
         "type": paper.get("type", "article"),
         "abstract": paper.get("abstract"),
         "source": "local",
-        "relevance_score": similarity * 1000,
-        "original_score": similarity,
+        "relevance_score": relevance_score,
+        "original_score": original_score,
     }
+
+
+# Backward compatibility aliases
+def _normalize_local_vector(paper: dict[str, Any]) -> dict[str, Any]:
+    """Normalize local vector search result."""
+    return _normalize_local_result(paper, use_vector=True)
 
 
 def _normalize_local_keyword(paper: dict[str, Any]) -> dict[str, Any]:
     """Normalize local keyword search result."""
-    return {
-        "title": paper.get("title", "Untitled"),
-        "identifier": paper.get("identifier"),
-        "publication_year": paper.get("publication_year"),
-        "type": paper.get("type", "article"),
-        "abstract": paper.get("abstract"),
-        "source": "local",
-        "relevance_score": 500,
-        "original_score": 0.5,
-    }
+    return _normalize_local_result(paper, use_vector=False)
 
 
 def _normalize_openalex(work: dict[str, Any]) -> dict[str, Any]:

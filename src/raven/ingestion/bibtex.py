@@ -20,6 +20,24 @@ from typing import Any
 import bibtexparser
 
 
+def _get_field(entry: dict[str, Any], field_name: str, *alternates: str) -> str | None:
+    """Get a field value from a dictionary, trying multiple field name variants.
+
+    Args:
+        entry: Dictionary to search.
+        field_name: Primary field name to try.
+        *alternates: Alternate field names to try if primary not found.
+
+    Returns:
+        First non-empty value found, or None.
+    """
+    for name in (field_name, *alternates):
+        value: str | None = entry.get(name)  # type: ignore[assignment]
+        if value:
+            return value
+    return None
+
+
 def parse_bibtex_file(file_path: Path) -> list[dict[str, Any]]:
     """Parse a BibTeX file and return entries as list of dictionaries.
 
@@ -53,31 +71,29 @@ def extract_identifier_from_bibtex(entry: dict[str, Any]) -> str | None:
         Normalized identifier string (e.g., 'doi:10.5281/...') or None.
     """
     # DOI - check common field names
-    doi = entry.get("doi") or entry.get("DOI")
+    doi = _get_field(entry, "doi", "DOI")
     if doi:
         doi_value = _normalize_doi(doi)
         if doi_value:
             return f"doi:{doi_value}"
 
     # PMID - check common field names
-    pmid = entry.get("pmid") or entry.get("PMID") or entry.get("pubmed_id")
+    pmid = _get_field(entry, "pmid", "PMID", "pubmed_id")
     if pmid:
         return f"pmid:{_normalize_pmid(pmid)}"
 
     # PMCID - check common field names
-    pmcid = entry.get("pmcid") or entry.get("PMCID") or entry.get("pmc_id")
+    pmcid = _get_field(entry, "pmcid", "PMCID", "pmc_id")
     if pmcid:
         return f"pmcid:{_normalize_pmcid(pmcid)}"
 
     # MAG - check common field names
-    mag = entry.get("mag") or entry.get("MAG") or entry.get("microsoft_id")
+    mag = _get_field(entry, "mag", "MAG", "microsoft_id")
     if mag:
         return f"mag:{_normalize_mag(mag)}"
 
     # OpenAlex ID - check common field names
-    openalex = (
-        entry.get("openalex") or entry.get("OPENALEX") or entry.get("openalex_id")
-    )
+    openalex = _get_field(entry, "openalex", "OPENALEX", "openalex_id")
     if openalex:
         return f"openalex:{_normalize_openalex(openalex)}"
 
