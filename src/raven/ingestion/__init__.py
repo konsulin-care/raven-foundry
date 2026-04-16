@@ -61,7 +61,7 @@ __all__ = [
     "normalize_doi",
     "normalize_identifier",
     # Metadata
-    "_prepare_paper_info",
+    "prepare_paper_info",
     # Pipeline
     "_get_existing_paper_info",
     "_handle_existing_paper",
@@ -110,7 +110,7 @@ _LAZY_IMPORTS = {
     "normalize_doi": ("raven.ingestion.identifier", "normalize_doi"),
     "normalize_identifier": ("raven.ingestion.identifier", "normalize_identifier"),
     # Metadata
-    "_prepare_paper_info": ("raven.ingestion.metadata", "_prepare_paper_info"),
+    "prepare_paper_info": ("raven.ingestion.metadata", "prepare_paper_info"),
     # Pipeline
     "_get_existing_paper_info": (
         "raven.ingestion.pipeline",
@@ -167,7 +167,7 @@ if TYPE_CHECKING:
         normalize_doi,
         normalize_identifier,
     )
-    from raven.ingestion.metadata import _prepare_paper_info
+    from raven.ingestion.metadata import prepare_paper_info
     from raven.ingestion.pipeline import (
         _get_existing_paper_info,
         _handle_existing_paper,

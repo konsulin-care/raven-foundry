@@ -45,7 +45,7 @@ def _extract_author_data(authorship: dict[str, Any], order: int) -> dict[str, An
     }
 
 
-def _extract_paper_metadata(work: dict[str, Any]) -> dict[str, Any]:
+def extract_paper_metadata(work: dict[str, Any]) -> dict[str, Any]:
     """Extract metadata fields from OpenAlex work.
 
     Args:
@@ -91,7 +91,7 @@ def _extract_paper_metadata(work: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
+def prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Prepare paper info dict and embedding text from OpenAlex work result.
 
     Args:
@@ -101,7 +101,7 @@ def _prepare_paper_info(work: dict[str, Any]) -> tuple[dict[str, Any], str]:
         Tuple of (paper_info dict, embedding_text string).
     """
     # Extract metadata
-    metadata = _extract_paper_metadata(work)
+    metadata = extract_paper_metadata(work)
 
     # Get title and abstract for embedding text
     title = metadata.get("title", "Untitled")

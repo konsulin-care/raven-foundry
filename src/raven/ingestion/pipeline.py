@@ -99,7 +99,7 @@ def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
     """Ingest a paper by identifier from OpenAlex with embedding generation."""
     from raven.ingestion.api import fetch_work
     from raven.ingestion.identifier import normalize_identifier
-    from raven.ingestion.metadata import _extract_paper_metadata
+    from raven.ingestion.metadata import extract_paper_metadata
     from raven.ingestion.text import combine_title_abstract
 
     normalized = normalize_identifier(identifier)
@@ -107,7 +107,7 @@ def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
     if work is None:
         return None
 
-    metadata = _extract_paper_metadata(work)
+    metadata = extract_paper_metadata(work)
     final_identifier = metadata["identifier"]
     title = metadata["title"]
     paper_type = metadata["paper_type"]
@@ -146,7 +146,7 @@ def ingest_search_results(
     db_path: Path, search_results: dict[str, Any]
 ) -> list[dict[str, Any]]:
     """Ingest multiple papers from OpenAlex search results."""
-    from raven.ingestion.metadata import _prepare_paper_info
+    from raven.ingestion.metadata import prepare_paper_info
 
     results = search_results.get("results", [])
     if not results:
@@ -154,7 +154,7 @@ def ingest_search_results(
 
     papers_data = []
     for work in results:
-        paper_info, embedding_text = _prepare_paper_info(work)
+        paper_info, embedding_text = prepare_paper_info(work)
         papers_data.append((paper_info, embedding_text))
 
     embeddings = None

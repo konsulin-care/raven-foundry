@@ -9,7 +9,7 @@ from unittest.mock import patch
 from raven.ingestion import (
     _get_existing_paper_info,
     _handle_existing_paper,
-    _prepare_paper_info,
+    prepare_paper_info,
 )
 from raven.storage import init_database
 
@@ -117,7 +117,7 @@ class TestHandleExistingPaper:
 
 
 class TestPreparePaperInfo:
-    """Tests for _prepare_paper_info helper."""
+    """Tests for prepare_paper_info helper."""
 
     def test_extracts_basic_fields(self):
         """Extracts identifier, title, type from work."""
@@ -131,7 +131,7 @@ class TestPreparePaperInfo:
             "id": "https://openalex.org/W123",
         }
 
-        paper_info, embedding_text = _prepare_paper_info(work)
+        paper_info, embedding_text = prepare_paper_info(work)
 
         assert paper_info["identifier"] == "doi:10.1234/test"
         assert paper_info["title"] == "Test Paper"
@@ -151,7 +151,7 @@ class TestPreparePaperInfo:
             ],
         }
 
-        paper_info, _ = _prepare_paper_info(work)
+        paper_info, _ = prepare_paper_info(work)
 
         assert paper_info["authors"] == "John Doe, Jane Smith"
 
@@ -163,7 +163,7 @@ class TestPreparePaperInfo:
             "host_venue": {"display_name": "Test Journal"},
         }
 
-        paper_info, _ = _prepare_paper_info(work)
+        paper_info, _ = prepare_paper_info(work)
 
         assert paper_info["venue"] == "Test Journal"
 
@@ -179,7 +179,7 @@ class TestPreparePaperInfo:
             "id": "https://openalex.org/W123456",
         }
 
-        paper_info, embedding_text = _prepare_paper_info(work)
+        paper_info, embedding_text = prepare_paper_info(work)
 
         assert paper_info["identifier"] == "openalex:W123456"
         assert paper_info["title"] == "Test Paper"
@@ -188,7 +188,7 @@ class TestPreparePaperInfo:
         """Handles missing fields gracefully."""
         work = {"title": "Test Paper"}
 
-        paper_info, embedding_text = _prepare_paper_info(work)
+        paper_info, embedding_text = prepare_paper_info(work)
 
         assert paper_info["identifier"] is None
         assert paper_info["title"] == "Test Paper"

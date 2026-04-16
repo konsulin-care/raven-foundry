@@ -9,7 +9,7 @@ import sqlite3
 logger = logging.getLogger(__name__)
 
 
-def _safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> None:
+def safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> None:
     """Safely add a column with validation and quoting.
 
     This helper combines whitelist validation with identifier quoting to

@@ -17,7 +17,7 @@ Module Structure:
 __all__ = [
     # DB
     "_load_vector_extension",
-    "_safe_add_column",
+    "safe_add_column",
     "init_database",
     "serialize_f32",
     # Embedding
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
         search_by_embedding,
     )
     from raven.storage.identifier import extract_identifier
-    from raven.storage.migrations import _safe_add_column
+    from raven.storage.migrations import safe_add_column
     from raven.storage.paper import (
         add_paper,
         get_paper_id_by_doi,
@@ -69,10 +69,10 @@ def __getattr__(name: str) -> object:
         from raven.storage.db import serialize_f32
 
         return serialize_f32
-    if name == "_safe_add_column":
-        from raven.storage.migrations import _safe_add_column
+    if name == "safe_add_column":
+        from raven.storage.migrations import safe_add_column
 
-        return _safe_add_column
+        return safe_add_column
     if name == "_load_vector_extension":
         from raven.storage.db import _load_vector_extension
 

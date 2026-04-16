@@ -95,9 +95,9 @@ def init_database(db_path: Path) -> None:
         # Add missing columns (check against ORIGINAL state)
         for col_name, col_type in columns_to_add.items():
             if col_name not in original_columns:
-                from raven.storage.migrations import _safe_add_column
+                from raven.storage.migrations import safe_add_column
 
-                _safe_add_column(conn, col_name, col_type)
+                safe_add_column(conn, col_name, col_type)
 
         # Migration: Migrate doi -> identifier (only if doi EXISTS in original)
         if "doi" in original_columns:
