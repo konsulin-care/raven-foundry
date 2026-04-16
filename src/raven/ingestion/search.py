@@ -12,50 +12,13 @@ from typing import Any
 
 import requests
 
-from raven.config import get_openalex_api_key
-from raven.ingestion.api import (
-    DEFAULT_SORT_ORDER,
-    SEMANTIC_FILTERS,
-    _create_session_with_retries,
-    _get_openalex_base_url,
-    _parse_search_query,
-    _rate_limit_semantic,
+from raven.ingestion.search_client import (
+    check_rate_limit_semantic,
+    get_search_client,
+    parse_search_response,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _get_search_client() -> tuple[str, Any, Any]:
-    """Get common search client components.
-
-    Returns:
-        Tuple of (api_key, base_url, session).
-    """
-    api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
-    session = _create_session_with_retries()
-    return api_key, base_url, session
-
-
-def _parse_search_response(response: Any, search_type: str) -> dict[str, Any]:
-    """Parse OpenAlex search response.
-
-    Args:
-        response: Requests response object.
-        search_type: Type of search ('semantic' or 'keyword').
-
-    Returns:
-        Parsed response dict with search_type.
-    """
-    if response.status_code != 200:
-        logger.error(
-            "OpenAlex %s search error: status %s", search_type, response.status_code
-        )
-        return {"results": [], "meta": {"count": 0}, "search_type": search_type}
-
-    data: dict[str, Any] = response.json()
-    data["search_type"] = search_type
-    return data
 
 
 def search_works(
@@ -63,7 +26,7 @@ def search_works(
     filter_str: str | None = None,
     page: int = 1,
     per_page: int = 50,
-    sort: str = DEFAULT_SORT_ORDER,
+    sort: str = "relevance_score:desc",
     use_semantic: bool = True,
 ) -> dict[str, Any]:
     """Search works via OpenAlex API.
@@ -81,14 +44,14 @@ def search_works(
     Returns:
         Dict with 'results', 'meta' (pagination info), 'search_type' indicator
     """
-    from raven.ingestion.api import DEFAULT_FILTERS
+    from raven.ingestion.api import DEFAULT_FILTERS, SEMANTIC_FILTERS
 
-    api_key, base_url, session = _get_search_client()
+    api_key, base_url, session = get_search_client()
 
     # Try semantic search first if enabled
     if use_semantic:
         try:
-            _rate_limit_semantic()
+            check_rate_limit_semantic()
 
             # Build filters for semantic search (limited supported filters)
             semantic_filters = [SEMANTIC_FILTERS]
@@ -131,7 +94,7 @@ def search_works(
     search_type = "keyword"
     url = f"{base_url}/works"
     keyword_params: dict[str, Any] = {
-        "search": _parse_search_query(query),
+        "search": query,
         "filter": combined_filter,
         "sort": sort,
         "per_page": min(per_page, 100),  # Keyword max 100
@@ -141,7 +104,7 @@ def search_works(
 
     try:
         response = session.get(url, params=keyword_params, timeout=30)
-        return _parse_search_response(response, search_type)
+        return parse_search_response(response, search_type)
 
     except requests.exceptions.RequestException as e:
         logger.error("Network error during search: %s", e)
@@ -153,7 +116,7 @@ def search_works_keyword(
     filter_str: str | None = None,
     page: int = 1,
     per_page: int = 50,
-    sort: str = DEFAULT_SORT_ORDER,
+    sort: str = "relevance_score:desc",
 ) -> dict[str, Any]:
     """Keyword-only search (explicit).
 
@@ -169,7 +132,7 @@ def search_works_keyword(
     """
     from raven.ingestion.api import DEFAULT_FILTERS
 
-    api_key, base_url, session = _get_search_client()
+    api_key, base_url, session = get_search_client()
 
     filters = [DEFAULT_FILTERS]
     if filter_str:
@@ -178,7 +141,7 @@ def search_works_keyword(
 
     url = f"{base_url}/works"
     params: dict[str, Any] = {
-        "search": _parse_search_query(query),
+        "search": query,
         "filter": combined_filter,
         "sort": sort,
         "per_page": min(per_page, 100),
@@ -188,7 +151,7 @@ def search_works_keyword(
 
     try:
         response = session.get(url, params=params, timeout=30)
-        return _parse_search_response(response, "keyword")
+        return parse_search_response(response, "keyword")
 
     except requests.exceptions.RequestException as e:
         logger.error("Network error during keyword search: %s", e)
@@ -210,9 +173,11 @@ def search_works_semantic(
     Returns:
         Dict with 'results', 'meta', 'search_type'='semantic'
     """
-    _rate_limit_semantic()
+    from raven.ingestion.api import DEFAULT_SORT_ORDER, SEMANTIC_FILTERS
 
-    api_key, base_url, session = _get_search_client()
+    check_rate_limit_semantic()
+
+    api_key, base_url, session = get_search_client()
 
     url = f"{base_url}/works"
     params: dict[str, Any] = {
@@ -225,7 +190,7 @@ def search_works_semantic(
 
     try:
         response = session.get(url, params=params, timeout=30)
-        return _parse_search_response(response, "semantic")
+        return parse_search_response(response, "semantic")
 
     except requests.exceptions.RequestException as e:
         logger.error("Network error during semantic search: %s", e)

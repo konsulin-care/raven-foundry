@@ -1,176 +1,52 @@
 """Configuration module for Raven - loads environment variables from .env file."""
 
-import os
-import platform
 from pathlib import Path
-from typing import Optional
+
+# Import paths module at top level for backward compat _config
+import raven.paths  # noqa: E402
+from raven.paths import (
+    find_env_file,
+    get_data_dir,
+    load_config,
+    lookup,
+    parse_env_file,
+    reset_config,
+)
 
 # Default values
 DEFAULT_OPENALEX_API_URL = "https://api.openalex.org"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 
-# Global config cache
-_config: dict[str, str] = {}
-
 __all__ = [
-    "_get_data_dir",
-    "_load_config",
-    "_reset_config",
-    "_find_env_file",
-    "_parse_env_file",
+    "get_data_dir",
+    "load_config",
+    "reset_config",
+    "find_env_file",
+    "parse_env_file",
     "get_groq_api_key",
     "get_groq_model",
     "get_openalex_api_key",
     "get_openalex_api_url",
+    # Backward compatibility aliases
+    "_get_data_dir",
+    "_load_config",
+    "_reset_config",
+    "_lookup",
+    "_find_env_file",
+    "_parse_env_file",
+    "_config",
 ]
 
+# Type alias for config dict
+ConfigDict = dict[str, str]
 
-def _reset_config() -> None:
-    """Reset the config cache. Used for testing."""
-    global _config
-    _config = {}
-
-
-def _get_data_dir() -> Path:
-    """Get data directory, cross-platform compatible.
-
-    Returns the appropriate data directory based on OS:
-    - Windows: %APPDATA%/raven
-    - macOS/Linux: $XDG_DATA_HOME/raven if set, otherwise ~/.config/raven
-
-    Override with RAVEN_DATA_DIR environment variable.
-    """
-    # Allow override via environment variable
-    data_dir = os.environ.get("RAVEN_DATA_DIR")
-    if data_dir:
-        return Path(data_dir)
-
-    system = platform.system()
-    home = Path.home()
-
-    if system == "Windows":
-        # Windows: %APPDATA%
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            return Path(appdata) / "raven"
-        return home / "AppData" / "Roaming" / "raven"
-    else:
-        # macOS/Linux: XDG_DATA_HOME if set, otherwise ~/.config
-        xdg_data = os.environ.get("XDG_DATA_HOME")
-        if xdg_data:
-            return Path(xdg_data) / "raven"
-        return home / ".config" / "raven"
-
-
-def _find_env_file(env_path: str | Path | None = None) -> Optional[Path]:
-    """Find .env file.
-
-    Args:
-        env_path: Explicit path to .env file. If provided and exists, use it directly.
-                If None, falls back to default logic:
-                - Check cwd/.env first
-                - Fall back to data_dir/.env
-
-    Returns:
-        Path to .env file if found, None otherwise.
-    """
-    # 1. User-provided explicit path
-    if env_path is not None:
-        path_obj = Path(env_path) if isinstance(env_path, str) else env_path
-        if path_obj.exists() and path_obj.is_file():
-            return path_obj
-        return None
-
-    # 2. Default: cwd/.env
-    cwd_env = Path.cwd() / ".env"
-    if cwd_env.exists():
-        return cwd_env
-
-    # 3. Default: data_dir/.env
-    data_dir = _get_data_dir()
-    data_env = data_dir / ".env"
-    if data_env.exists():
-        return data_env
-
-    return None
-
-
-def _parse_env_file(env_path: Path) -> dict[str, str]:
-    """Parse .env file and return dict of key-value pairs."""
-    config: dict[str, str] = {}
-
-    if not env_path.exists():
-        return config
-
-    with open(env_path, "r") as f:
-        for line in f:
-            line = line.strip()
-            # Skip empty lines and comments
-            if not line or line.startswith("#"):
-                continue
-
-            # Parse key=value
-            if "=" in line:
-                key, value = line.split("=", 1)
-                config[key.strip()] = value.strip()
-
-    return config
-
-
-def _load_config(env_path: str | Path | None = None) -> dict[str, str]:
-    """Load configuration from .env file.
-
-    Args:
-        env_path: Explicit path to .env file. If provided and exists, use it.
-                If None, uses default logic (cwd/.env -> data_dir/.env).
-
-    Note:
-        Loaded values are propagated to os.environ to ensure consistency
-        across the application (e.g., _get_data_dir() reads RAVEN_DATA_DIR).
-        Results are cached after first load.
-    """
-    global _config
-    if _config:  # Already loaded - return cached
-        return _config
-
-    env_path = _find_env_file(env_path)
-
-    if env_path:
-        _config = _parse_env_file(env_path)
-    else:
-        _config = {}
-
-    # Propagate loaded config to os.environ for consistency
-    for key, value in _config.items():
-        os.environ[key] = value
-
-    return _config
-
-
-def _lookup(key: str, default: str | None = None) -> str | None:
-    """Look up a config value from cache or environment.
-
-    Args:
-        key: Configuration key.
-        default: Default value if not found.
-
-    Returns:
-        Config value or default.
-    """
-    config = _load_config()
-    return config.get(key) or os.environ.get(key) or default
+# Backward compatibility: _config references paths._config
+_config: ConfigDict = raven.paths._config  # type: ignore[assignment]
 
 
 def get_groq_api_key() -> str:
-    """Get GROQ_API_KEY from environment.
-
-    Returns:
-        The API key string.
-
-    Raises:
-        ValueError: If GROQ_API_KEY is not set in .env file or environment.
-    """
-    api_key = _lookup("GROQ_API_KEY")
+    """Get GROQ_API_KEY from environment."""
+    api_key = lookup("GROQ_API_KEY")
     if not api_key:
         raise ValueError(
             "GROQ_API_KEY is not set. Please add it to your .env file.\n"
@@ -180,24 +56,13 @@ def get_groq_api_key() -> str:
 
 
 def get_groq_model() -> str:
-    """Get GROQ_MODEL from environment.
-
-    Returns:
-        The model identifier string, defaults to openai/gpt-oss-120b.
-    """
-    return _lookup("GROQ_MODEL") or DEFAULT_GROQ_MODEL
+    """Get GROQ_MODEL from environment."""
+    return lookup("GROQ_MODEL") or DEFAULT_GROQ_MODEL
 
 
 def get_openalex_api_key() -> str:
-    """Get OPENALEX_API_KEY from environment.
-
-    Returns:
-        The API key string.
-
-    Raises:
-        ValueError: If OPENALEX_API_KEY is not set in .env file or environment.
-    """
-    api_key = _lookup("OPENALEX_API_KEY")
+    """Get OPENALEX_API_KEY from environment."""
+    api_key = lookup("OPENALEX_API_KEY")
     if not api_key:
         raise ValueError(
             "OPENALEX_API_KEY is not set. Please add it to your .env file.\n"
@@ -207,20 +72,60 @@ def get_openalex_api_key() -> str:
 
 
 def get_openalex_api_url() -> str:
-    """Get OPENALEX_API_URL from environment.
+    """Get OPENALEX_API_URL from environment."""
+    return lookup("OPENALEX_API_URL") or DEFAULT_OPENALEX_API_URL
 
-    Returns:
-        The API URL string, defaults to https://api.openalex.org if not set.
-    """
-    return _lookup("OPENALEX_API_URL") or DEFAULT_OPENALEX_API_URL
+
+# Backward compatibility aliases (with underscore prefix)
+_get_data_dir = get_data_dir
+_load_config_orig = load_config
+_reset_config_orig = reset_config
+_lookup_orig = lookup
+_find_env_file = find_env_file
+_parse_env_file = parse_env_file
+
+
+def _reset_config() -> None:
+    """Reset both config caches for testing."""
+    _reset_config_orig()
+    global _config
+    _config = {}
+
+
+def _load_config(env_path: str | Path | None = None) -> ConfigDict:
+    """Load configuration from .env file (backward compat wrapper)."""
+    global _config
+    _config = {}
+    _reset_config_orig()
+    return _load_config_orig(env_path)
+
+
+def _lookup(key: str, default: str | None = None) -> str | None:
+    """Look up a config value (backward compat wrapper)."""
+    return _lookup_orig(key, default)
 
 
 def __getattr__(name: str) -> object:
     """Lazy loading for module-level attributes."""
+    if name == "get_data_dir":
+        return get_data_dir
+    if name == "load_config":
+        return load_config
+    if name == "lookup":
+        return lookup
+    # Backward compatibility
     if name == "_get_data_dir":
         return _get_data_dir
     if name == "_load_config":
         return _load_config
+    if name == "_reset_config":
+        return _reset_config
     if name == "_lookup":
         return _lookup
+    if name == "_find_env_file":
+        return _find_env_file
+    if name == "_parse_env_file":
+        return _parse_env_file
+    if name == "_config":
+        return _config
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

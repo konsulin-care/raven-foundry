@@ -7,6 +7,7 @@ from typing import Generator
 import pytest
 
 import raven.config
+import raven.paths
 
 
 @pytest.fixture(autouse=True)
@@ -29,13 +30,15 @@ def reset_config_cache() -> Generator[None, None, None]:
     for k in test_env_keys:
         os.environ.pop(k, None)
 
-    # Clear the global config cache
+    # Clear the global config cache in both modules
     raven.config._config = {}
+    raven.paths._config = {}
 
     yield
 
     # Clean up after test
     raven.config._config = {}
+    raven.paths._config = {}
     # Restore original env vars
     for k, v in original_vals.items():
         if v is not None:
@@ -83,8 +86,9 @@ def mock_api_keys(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None
             # raven.config functions will read from os.environ
             pass
     """
-    # Ensure no .env file is found (override the search path)
+    # Ensure no .env file is found (override the search path in both modules)
     monkeypatch.setattr(raven.config, "_find_env_file", lambda env_path=None: None)
+    monkeypatch.setattr(raven.paths, "find_env_file", lambda env_path=None: None)
 
     # Set test values in environment
     original_env = os.environ.copy()

@@ -13,29 +13,19 @@ Supported identifiers:
 - OpenAlex ID: W7119934875, openalex:W7119934875
 """
 
-import re
 from pathlib import Path
 from typing import Any
 
 import bibtexparser
 
-
-def _get_field(entry: dict[str, Any], field_name: str, *alternates: str) -> str | None:
-    """Get a field value from a dictionary, trying multiple field name variants.
-
-    Args:
-        entry: Dictionary to search.
-        field_name: Primary field name to try.
-        *alternates: Alternate field names to try if primary not found.
-
-    Returns:
-        First non-empty value found, or None.
-    """
-    for name in (field_name, *alternates):
-        value: str | None = entry.get(name)  # type: ignore[assignment]
-        if value:
-            return value
-    return None
+from raven.ingestion.bibtex_normalize import (
+    get_field,
+    normalize_doi,
+    normalize_mag,
+    normalize_openalex,
+    normalize_pmcid,
+    normalize_pmid,
+)
 
 
 def parse_bibtex_file(file_path: Path) -> list[dict[str, Any]]:
@@ -71,125 +61,33 @@ def extract_identifier_from_bibtex(entry: dict[str, Any]) -> str | None:
         Normalized identifier string (e.g., 'doi:10.5281/...') or None.
     """
     # DOI - check common field names
-    doi = _get_field(entry, "doi", "DOI")
+    doi = get_field(entry, "doi", "DOI")
     if doi:
-        doi_value = _normalize_doi(doi)
+        doi_value = normalize_doi(doi)
         if doi_value:
             return f"doi:{doi_value}"
 
     # PMID - check common field names
-    pmid = _get_field(entry, "pmid", "PMID", "pubmed_id")
+    pmid = get_field(entry, "pmid", "PMID", "pubmed_id")
     if pmid:
-        return f"pmid:{_normalize_pmid(pmid)}"
+        return f"pmid:{normalize_pmid(pmid)}"
 
     # PMCID - check common field names
-    pmcid = _get_field(entry, "pmcid", "PMCID", "pmc_id")
+    pmcid = get_field(entry, "pmcid", "PMCID", "pmc_id")
     if pmcid:
-        return f"pmcid:{_normalize_pmcid(pmcid)}"
+        return f"pmcid:{normalize_pmcid(pmcid)}"
 
     # MAG - check common field names
-    mag = _get_field(entry, "mag", "MAG", "microsoft_id")
+    mag = get_field(entry, "mag", "MAG", "microsoft_id")
     if mag:
-        return f"mag:{_normalize_mag(mag)}"
+        return f"mag:{normalize_mag(mag)}"
 
     # OpenAlex ID - check common field names
-    openalex = _get_field(entry, "openalex", "OPENALEX", "openalex_id")
+    openalex = get_field(entry, "openalex", "OPENALEX", "openalex_id")
     if openalex:
-        return f"openalex:{_normalize_openalex(openalex)}"
+        return f"openalex:{normalize_openalex(openalex)}"
 
     return None
-
-
-def _normalize_doi(value: str) -> str | None:
-    """Normalize DOI value.
-
-    Args:
-        value: Raw DOI value from BibTeX.
-
-    Returns:
-        Normalized DOI without URL prefix, or None if invalid.
-    """
-    if not value:
-        return None
-    # Strip common prefixes
-    value = value.strip()
-    value = re.sub(r"^doi:", "", value, flags=re.IGNORECASE)
-    value = re.sub(r"^https?://doi\.org/", "", value, flags=re.IGNORECASE)
-    value = re.sub(r"^http://doi\.org/", "", value, flags=re.IGNORECASE)
-    # Validate basic DOI format
-    if re.match(r"^10\.\d{4,}/", value):
-        return value
-    return None
-
-
-def _normalize_pmid(value: str) -> str:
-    """Normalize PMID value.
-
-    Args:
-        value: Raw PMID value from BibTeX.
-
-    Returns:
-        Normalized PMID (digits only).
-    """
-    if not value:
-        return ""
-    # Strip non-digit characters
-    return re.sub(r"\D", "", value.strip())
-
-
-def _normalize_pmcid(value: str) -> str:
-    """Normalize PMCID value.
-
-    Args:
-        value: Raw PMCID value from BibTeX.
-
-    Returns:
-        Normalized PMCID (with PMC prefix).
-    """
-    if not value:
-        return ""
-    value = value.strip()
-    # Ensure PMC prefix
-    if not value.upper().startswith("PMC"):
-        value = f"PMC{value}"
-    # Strip non-alphanumeric (keep PMC and digits)
-    return re.sub(r"[^A-Za-z0-9]", "", value)
-
-
-def _normalize_mag(value: str) -> str:
-    """Normalize MAG (Microsoft Academic Graph) ID value.
-
-    Args:
-        value: Raw MAG ID from BibTeX.
-
-    Returns:
-        Normalized MAG ID (digits only).
-    """
-    if not value:
-        return ""
-    # MAG IDs are numeric
-    return re.sub(r"\D", "", value.strip())
-
-
-def _normalize_openalex(value: str) -> str:
-    """Normalize OpenAlex ID value.
-
-    Args:
-        value: Raw OpenAlex ID from BibTeX.
-
-    Returns:
-        Normalized OpenAlex ID (W prefix + digits).
-    """
-    if not value:
-        return ""
-    value = value.strip()
-    # Strip URL prefix
-    value = re.sub(r"^https?://openalex\.org/", "", value, flags=re.IGNORECASE)
-    # Ensure W prefix
-    if not value.upper().startswith("W"):
-        value = f"W{value}"
-    # Keep only alphanumeric
-    return re.sub(r"[^A-Za-z0-9]", "", value)
 
 
 def filter_valid_entries(
