@@ -8,7 +8,7 @@ from typing import Optional
 import click
 
 from raven.cli.lazy_group import LazyGroup
-from raven.config import _get_data_dir, _load_config
+from raven.paths import get_data_dir, load_config
 
 # Lazy-loaded subcommands map
 # Format: "command_name": "module.path:command_object_name"
@@ -54,17 +54,17 @@ def _resolve_db_path(
         Resolved Path to the database
     """
 
-    # Load config from env to set RAVEN_DATA_DIR for _get_data_dir()
+    # Load config from env to set RAVEN_DATA_DIR for get_data_dir()
     # click.Path converts to str via __fspath__
     env_path_obj: Optional[Path] = Path(str(env_path)) if env_path else None
-    _load_config(env_path_obj)
+    load_config(env_path_obj)
 
     if db_path is not None:
         # Explicit --db option takes precedence
         return Path(str(db_path))
 
     # Derive from data_dir (respects RAVEN_DATA_DIR from loaded env)
-    return _get_data_dir() / "raven.db"
+    return get_data_dir() / "raven.db"
 
 
 @click.group(

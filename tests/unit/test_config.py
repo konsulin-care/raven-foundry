@@ -8,13 +8,12 @@ from unittest.mock import patch
 import pytest
 
 import raven.config
+import raven.paths
 from raven.config import (
     get_groq_api_key,
     get_openalex_api_key,
     get_openalex_api_url,
 )
-
-# Config Module Tests
 
 
 class TestConfigModule:
@@ -25,10 +24,10 @@ class TestConfigModule:
         env_file = tmp_path / ".env"
         env_file.write_text("GROQ_API_KEY=test-key-123\n")
 
-        with patch("raven.config._find_env_file", return_value=env_file):
+        with patch("raven.paths.find_env_file", return_value=env_file):
             # Clear cached config
-            raven.config._config = {}
-            raven.config._load_config()
+            raven.paths._config = {}
+            raven.paths.load_config()
 
             assert get_groq_api_key() == "test-key-123"
 
@@ -37,9 +36,9 @@ class TestConfigModule:
         env_file = tmp_path / ".env"
         env_file.write_text("OTHER_KEY=value\n")
 
-        with patch("raven.config._find_env_file", return_value=env_file):
-            raven.config._config = {}
-            raven.config._load_config()
+        with patch("raven.paths.find_env_file", return_value=env_file):
+            raven.paths._config = {}
+            raven.paths.load_config()
 
             with pytest.raises(ValueError, match="GROQ_API_KEY is not set"):
                 get_groq_api_key()
@@ -49,9 +48,9 @@ class TestConfigModule:
         env_file = tmp_path / ".env"
         env_file.write_text("OPENALEX_API_KEY=openalex-key-456\n")
 
-        with patch("raven.config._find_env_file", return_value=env_file):
-            raven.config._config = {}
-            raven.config._load_config()
+        with patch("raven.paths.find_env_file", return_value=env_file):
+            raven.paths._config = {}
+            raven.paths.load_config()
 
             assert get_openalex_api_key() == "openalex-key-456"
 
@@ -60,9 +59,9 @@ class TestConfigModule:
         env_file = tmp_path / ".env"
         env_file.write_text("OTHER_KEY=value\n")
 
-        with patch("raven.config._find_env_file", return_value=env_file):
-            raven.config._config = {}
-            raven.config._load_config()
+        with patch("raven.paths.find_env_file", return_value=env_file):
+            raven.paths._config = {}
+            raven.paths.load_config()
 
             with pytest.raises(ValueError, match="OPENALEX_API_KEY is not set"):
                 get_openalex_api_key()
@@ -72,9 +71,9 @@ class TestConfigModule:
         env_file = tmp_path / ".env"
         env_file.write_text("OPENALEX_API_KEY=test\n")  # URL not set
 
-        with patch("raven.config._find_env_file", return_value=env_file):
-            raven.config._config = {}
-            raven.config._load_config()
+        with patch("raven.paths.find_env_file", return_value=env_file):
+            raven.paths._config = {}
+            raven.paths.load_config()
 
             assert get_openalex_api_url() == "https://api.openalex.org"
 
@@ -85,35 +84,35 @@ class TestConfigModule:
             "OPENALEX_API_KEY=test\nOPENALEX_API_URL=https://custom.example.com\n"
         )
 
-        with patch("raven.config._find_env_file", return_value=env_file):
-            raven.config._config = {}
-            raven.config._load_config()
+        with patch("raven.paths.find_env_file", return_value=env_file):
+            raven.paths._config = {}
+            raven.paths.load_config()
 
             assert get_openalex_api_url() == "https://custom.example.com"
 
     def test_missing_env_file_returns_empty_config(self):
         """Config handles missing .env file gracefully."""
-        with patch("raven.config._find_env_file", return_value=None):
-            raven.config._config = {}
-            config = raven.config._load_config()
+        with patch("raven.paths.find_env_file", return_value=None):
+            raven.paths._config = {}
+            config = raven.paths.load_config()
 
             assert config == {}
 
     def test_get_data_dir_from_environment(self, monkeypatch):
         """Config uses RAVEN_DATA_DIR when set."""
         monkeypatch.setenv("RAVEN_DATA_DIR", "/custom/data/path")
-        raven.config._config = {}  # Reset
+        raven.paths._config = {}  # Reset
 
-        data_dir = raven.config._get_data_dir()
+        data_dir = raven.paths.get_data_dir()
         assert str(data_dir) == "/custom/data/path"
 
     def test_get_data_dir_with_xdghome(self, monkeypatch):
         """Config uses XDG_DATA_HOME when set."""
         monkeypatch.delenv("RAVEN_DATA_DIR", raising=False)
         monkeypatch.setenv("XDG_DATA_HOME", "/custom/xdg")
-        raven.config._config = {}  # Reset
+        raven.paths._config = {}  # Reset
 
-        data_dir = raven.config._get_data_dir()
+        data_dir = raven.paths.get_data_dir()
         assert str(data_dir) == "/custom/xdg/raven"
 
     def test_find_env_file_in_cwd(self, tmp_path, monkeypatch):
@@ -126,7 +125,7 @@ class TestConfigModule:
         env_file.write_text("OPENALEX_API_KEY=test\n")
 
         # Verify it is found when working directory contains .env
-        result = raven.config._find_env_file()
+        result = raven.paths.find_env_file()
         assert result is not None
         assert result.name == ".env"
 
@@ -135,12 +134,12 @@ class TestConfigModule:
         env_file = tmp_path / ".env"
         env_file.write_text("# This is a comment\n\nKEY=value\n# Another comment\n")
 
-        result = raven.config._parse_env_file(env_file)
+        result = raven.paths.parse_env_file(env_file)
         assert result == {"KEY": "value"}
 
     def test_parse_env_file_missing_file(self, tmp_path):
-        """Config handles missing .env file in _parse_env_file."""
+        """Config handles missing .env file in parse_env_file."""
         env_file = tmp_path / "nonexistent.env"
 
-        result = raven.config._parse_env_file(env_file)
+        result = raven.paths.parse_env_file(env_file)
         assert result == {}

@@ -5,7 +5,7 @@ from typing import Optional
 
 import click
 
-from raven.config import _get_data_dir, _load_config
+from raven.paths import get_data_dir, load_config
 from raven.storage import init_database
 
 
@@ -13,12 +13,12 @@ def _resolve_db_path(
     env_path: Optional[Path] = None, db_path: Optional[Path] = None
 ) -> Path:
     """Resolve database path with proper precedence."""
-    _load_config(env_path)
+    load_config(env_path)
 
     if db_path is not None:
         return db_path
 
-    return _get_data_dir() / "raven.db"
+    return get_data_dir() / "raven.db"
 
 
 @click.command()

@@ -62,7 +62,7 @@ class TestMainFunctions:
         # Block .env loading
         from unittest.mock import patch as mock_patch
 
-        with mock_patch("raven.config._find_env_file", return_value=None):
+        with mock_patch("raven.paths.find_env_file", return_value=None):
             from raven.main import _resolve_db_path
 
             result = _resolve_db_path(env_path=None)

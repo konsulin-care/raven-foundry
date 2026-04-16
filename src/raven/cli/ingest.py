@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 import click
 
-from raven.config import _get_data_dir, _load_config
+from raven.paths import get_data_dir, load_config
 from raven.ingestion import ingest_paper
 from raven.ingestion.bibtex import filter_valid_entries, parse_bibtex_file
 
@@ -14,12 +14,12 @@ def _resolve_db_path(
     env_path: Optional[Path] = None, db_path: Optional[Path] = None
 ) -> Path:
     """Resolve database path with proper precedence."""
-    _load_config(env_path)
+    load_config(env_path)
 
     if db_path is not None:
         return db_path
 
-    return _get_data_dir() / "raven.db"
+    return get_data_dir() / "raven.db"
 
 
 @click.command()

@@ -15,6 +15,7 @@ from click.testing import CliRunner
 
 import raven.config
 import raven.main
+import raven.paths
 from raven.storage import add_paper, init_database
 
 # =============================================================================
@@ -134,7 +135,7 @@ class TestCLICommands:
 
     def test_cache_status_command(self, tmp_path, monkeypatch):
         """Test 'raven cache status' shows cache info."""
-        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr(raven.paths, "get_data_dir", lambda: tmp_path)
 
         runner = CliRunner()
 
@@ -149,7 +150,7 @@ class TestCLICommands:
 
     def test_cache_status_command_no_cache(self, tmp_path, monkeypatch):
         """Test 'raven cache status' when no cache exists."""
-        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr(raven.paths, "get_data_dir", lambda: tmp_path)
 
         runner = CliRunner()
 
@@ -163,7 +164,7 @@ class TestCLICommands:
 
     def test_cache_clean_command(self, tmp_path, monkeypatch):
         """Test 'raven cache clean' deletes cache."""
-        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr(raven.paths, "get_data_dir", lambda: tmp_path)
 
         runner = CliRunner()
 
@@ -192,7 +193,7 @@ class TestCLICommands:
         db_path = tmp_path / "nonexistent.db"
 
         # Patch where _get_data_dir is used in main.py
-        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr(raven.paths, "get_data_dir", lambda: tmp_path)
 
         result = runner.invoke(raven.main.cli, ["info", "--db", str(db_path)])
 
@@ -209,7 +210,7 @@ class TestCLICommands:
         add_paper(db_path, "10.1234/test", "Test Paper", "article")
 
         # Patch where _get_data_dir is used in main.py
-        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr(raven.paths, "get_data_dir", lambda: tmp_path)
 
         result = runner.invoke(raven.main.cli, ["info", "--db", str(db_path)])
 
@@ -227,7 +228,7 @@ class TestCLICommands:
             conn.commit()
 
         # Patch where _get_data_dir is used in main.py
-        monkeypatch.setattr(raven.main, "_get_data_dir", lambda: tmp_path)
+        monkeypatch.setattr(raven.paths, "get_data_dir", lambda: tmp_path)
 
         result = runner.invoke(raven.main.cli, ["info", "--db", str(db_path)])
 

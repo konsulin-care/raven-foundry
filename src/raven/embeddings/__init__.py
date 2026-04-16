@@ -16,8 +16,8 @@ from typing import Optional
 import click
 from sentence_transformers import SentenceTransformer
 
-# Import from raven.config
-from raven.config import _get_data_dir
+# Import from raven.paths
+from raven.paths import get_data_dir
 
 # Embedding model configuration
 EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
@@ -55,7 +55,7 @@ def _get_model_cache_dir() -> Path:
     Returns:
         Path to the model cache directory (raven/data_dir/model_cache).
     """
-    return _get_data_dir() / "model_cache"
+    return get_data_dir() / "model_cache"
 
 
 def _get_model() -> SentenceTransformer:
