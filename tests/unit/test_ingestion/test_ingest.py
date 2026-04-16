@@ -23,22 +23,21 @@ class TestIngestPaper:
     @patch("raven.ingestion.pipeline.add_paper")
     @patch("raven.ingestion.pipeline.get_embedding_exists")
     @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
-    @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion.api._create_session_with_retries")
     def test_ingest_paper_success(
         self,
         mock_session_cls,
-        mock_api_key,
         mock_get_paper_id_by_identifier,
         mock_get_embedding_exists,
         mock_add_paper,
         mock_update_paper,
         mock_generate_embedding,
         mock_add_embedding,
+        monkeypatch,
     ):
         """ingest_paper fetches paper, stores metadata and embedding."""
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
         # Setup mocks
-        mock_api_key.return_value = "test-key"
         mock_get_paper_id_by_identifier.return_value = (
             None  # New identifier - doesn't exist
         )
@@ -92,21 +91,20 @@ class TestIngestPaper:
     @patch("raven.storage.add_paper")
     @patch("raven.storage.get_embedding_exists")
     @patch("raven.storage.get_paper_id_by_identifier")
-    @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion.api._create_session_with_retries")
     def test_ingest_paper_api_error(
         self,
         mock_session_cls,
-        mock_api_key,
         mock_get_paper_id_by_identifier,
         mock_get_embedding_exists,
         mock_add_paper,
         mock_update_paper,
         mock_generate_embedding,
         mock_add_embedding,
+        monkeypatch,
     ):
         """ingest_paper returns None on API error."""
-        mock_api_key.return_value = "test-key"
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
         mock_get_paper_id_by_identifier.return_value = None
         mock_get_embedding_exists.return_value = False
         mock_session = MagicMock()
@@ -126,21 +124,20 @@ class TestIngestPaper:
     @patch("raven.storage.add_paper")
     @patch("raven.storage.get_embedding_exists")
     @patch("raven.storage.get_paper_id_by_identifier")
-    @patch("raven.ingestion.get_openalex_api_key")
     @patch("raven.ingestion.api._create_session_with_retries")
     def test_ingest_paper_network_error(
         self,
         mock_session_cls,
-        mock_api_key,
         mock_get_paper_id_by_identifier,
         mock_get_embedding_exists,
         mock_add_paper,
         mock_update_paper,
         mock_generate_embedding,
         mock_add_embedding,
+        monkeypatch,
     ):
         """ingest_paper returns None on network error."""
-        mock_api_key.return_value = "test-key"
+        monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
         mock_get_paper_id_by_identifier.return_value = None
         mock_get_embedding_exists.return_value = False
         mock_session = MagicMock()

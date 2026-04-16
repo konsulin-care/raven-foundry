@@ -109,7 +109,7 @@ class TestCLICommands:
         runner = CliRunner()
 
         # Mock OpenAlex API to return results with abstract
-        with patch("raven.ingestion.search_works") as mock_search:
+        with patch("raven.ingestion.search.search_works") as mock_search:
             mock_search.return_value = {
                 "results": [
                     {
@@ -120,6 +120,7 @@ class TestCLICommands:
                         "cited_by_count": 10,
                         "open_access": {"is_oa": True},
                         "relevance_score": 0.9,
+                        "abstract": "This is a test abstract for the paper about resilience.",
                         "abstract_inverted_index": {"test": [0], "paper": [1]},
                     }
                 ],
@@ -276,10 +277,6 @@ class TestCLICommands:
                 result = runner.invoke(
                     raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
                 )
-
-        result = runner.invoke(
-            raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
-        )
 
         assert result.exit_code == 0
         assert "Ingesting: 10.9999/failure" in result.output
