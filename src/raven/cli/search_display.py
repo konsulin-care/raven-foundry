@@ -60,6 +60,47 @@ def display_json(
         click.echo(json.dumps(output))
 
 
+def _display_no_results(
+    closest_info: dict[str, Any] | None,
+    max_distance: float,
+) -> None:
+    """Display message when no results found."""
+    if closest_info:
+        click.echo(f"No results found within threshold (distance < {max_distance}).")
+        click.echo(f"Closest match: {closest_info['title']}")
+        click.echo(
+            f"Distance: {closest_info['distance']:.3f} (relevance: {closest_info['relevance']:.3f})"
+        )
+        if closest_info.get("identifier"):
+            click.echo(f"Identifier: {closest_info['identifier']}")
+    else:
+        click.echo("No results found.")
+
+
+def _display_single_result(index: int, paper: dict[str, Any]) -> None:
+    """Display a single search result."""
+    title = paper.get("title", "Untitled")
+    click.echo(f"{index}. {title}")
+
+    if identifier := paper.get("identifier"):
+        click.echo(f"   Identifier: {identifier}")
+    if year := paper.get("year"):
+        click.echo(f"   Year: {year}")
+    click.echo(f"   Type: {paper.get('type', 'unknown')}")
+    click.echo(f"   Source: {paper.get('source', 'unknown')}")
+
+    ingested = "Yes" if paper.get("ingested") else "No"
+    click.echo(f"   Ingested: {ingested}")
+
+    if score := paper.get("relevance_score"):
+        click.echo(f"   Relevance: {score:.3f}")
+
+    if abstract := paper.get("abstract"):
+        preview = abstract[:300] + ("..." if len(abstract) > 300 else "")
+        click.echo(f"   Abstract: {preview}")
+    click.echo("---")
+
+
 def display_text(
     results: list[dict[str, Any]],
     total: int,
@@ -81,41 +122,11 @@ def display_text(
     total_pages = (total + per_page - 1) // per_page if per_page > 0 else 0
 
     if not results:
-        if closest_info:
-            click.echo(
-                f"No results found within threshold (distance < {max_distance})."
-            )
-            click.echo(f"Closest match: {closest_info['title']}")
-            click.echo(
-                f"Distance: {closest_info['distance']:.3f} (relevance: {closest_info['relevance']:.3f})"
-            )
-            if closest_info.get("identifier"):
-                click.echo(f"Identifier: {closest_info['identifier']}")
-        else:
-            click.echo("No results found.")
+        _display_no_results(closest_info, max_distance)
         return
 
     for i, paper in enumerate(results, 1):
-        title = paper.get("title", "Untitled")
-        click.echo(f"{i}. {title}")
-
-        if identifier := paper.get("identifier"):
-            click.echo(f"   Identifier: {identifier}")
-        if year := paper.get("year"):
-            click.echo(f"   Year: {year}")
-        click.echo(f"   Type: {paper.get('type', 'unknown')}")
-        click.echo(f"   Source: {paper.get('source', 'unknown')}")
-
-        ingested = "Yes" if paper.get("ingested") else "No"
-        click.echo(f"   Ingested: {ingested}")
-
-        if score := paper.get("relevance_score"):
-            click.echo(f"   Relevance: {score:.3f}")
-
-        if abstract := paper.get("abstract"):
-            preview = abstract[:300] + ("..." if len(abstract) > 300 else "")
-            click.echo(f"   Abstract: {preview}")
-        click.echo("---")
+        _display_single_result(i, paper)
 
     click.echo(
         f"Showing {len(results)} of {total} results (page {page} of ~{total_pages})"
