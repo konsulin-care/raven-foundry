@@ -38,6 +38,7 @@ class TestCLICommands:
         )
 
         assert result.exit_code == 0
+        # With no embeddings, closest match will be shown with threshold info
         assert "No results found" in result.output
 
     def test_search_command_with_results(self, tmp_path):
@@ -106,16 +107,30 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        # Test that search results include abstract field
-        # Note: Due to refactored fallback logic, we test that abstract is displayed
-        result = runner.invoke(
-            raven.main.cli,
-            ["search", "resilience"],
-        )
+        # Mock OpenAlex API to return results with abstract
+        with patch("raven.ingestion.search_works") as mock_search:
+            mock_search.return_value = {
+                "results": [
+                    {
+                        "title": "Test Paper",
+                        "type": "article",
+                        "ids": {"doi": "10.1234/test"},
+                        "publication_year": 2023,
+                        "cited_by_count": 10,
+                        "open_access": {"is_oa": True},
+                        "relevance_score": 0.9,
+                        "abstract_inverted_index": {"test": [0], "paper": [1]},
+                    }
+                ],
+                "meta": {"count": 1},
+                "search_type": "semantic",
+            }
 
-        assert result.exit_code == 0
-        # Verify abstract appears in output
-        assert "Abstract:" in result.output
+            result = runner.invoke(raven.main.cli, ["search", "resilience"])
+
+            assert result.exit_code == 0
+            # Verify abstract appears in JSON output (default is now JSON)
+            assert '"abstract":' in result.output
 
     def test_cache_status_command(self, tmp_path, monkeypatch):
         """Test 'raven cache status' shows cache info."""

@@ -74,7 +74,9 @@ def add_embedding(db_path: Path, paper_id: int, embedding: list[float]) -> None:
 
 
 def search_by_embedding(
-    db_path: Path, query_embedding: list[float], top_k: int = 10
+    db_path: Path,
+    query_embedding: list[float],
+    top_k: int = 10,
 ) -> list[dict[str, Any]]:
     """Search papers by vector similarity (KNN).
 
@@ -84,7 +86,9 @@ def search_by_embedding(
         top_k: Number of nearest neighbors to return (default: 10).
 
     Returns:
-        List of paper records with distance scores, sorted by similarity.
+        List of paper records with distance scores, sorted by distance ascending.
+        Returns all top_k results - filtering by max_distance should be done
+        in the calling code.
 
     Raises:
         ValueError: If the query embedding dimension doesn't match expected dimension.
@@ -106,10 +110,11 @@ def search_by_embedding(
             "'type=FLOAT32,dimension=384,distance=COSINE')"
         )
 
-        # Serialize query and run KNN search using vector_full_scan
+        # Serialize query and run KNN search using vector_full_scan in top-k mode
         query_json = json.dumps(query_embedding)
         conn.row_factory = sqlite3.Row
 
+        # Use top-k mode - returns sorted results by distance
         cursor = conn.execute(
             """
             SELECT

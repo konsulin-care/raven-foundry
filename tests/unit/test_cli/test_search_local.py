@@ -66,11 +66,11 @@ class TestSearchLocalOnly:
             mock_gen_emb.return_value = mock_embedding
             mock_search_emb.return_value = []
 
-            _search_local_only(db_path, query, keyword=False)
+            _search_local_only(db_path, query, keyword=False, text_output=True)
 
             # Verify vector search was called (default behavior)
             mock_gen_emb.assert_called_once_with(query)
-            mock_search_emb.assert_called_once_with(db_path, mock_embedding)
+            mock_search_emb.assert_called_once_with(db_path, mock_embedding, top_k=10)
 
     def test_search_local_keyword_with_flag(self, db_path, capsys):
         """Verify keyword search is called when --keyword flag is set.
@@ -80,19 +80,20 @@ class TestSearchLocalOnly:
         """
         query = "machine learning"
 
-        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
+        # Mock search_papers at the correct location (imported inside function)
+        with patch("raven.storage.paper.search_papers") as mock_search_papers:
             mock_search_papers.return_value = []
 
-            _search_local_only(db_path, query, keyword=True)
+            _search_local_only(db_path, query, keyword=True, text_output=True)
 
             # Verify keyword search was called
             mock_search_papers.assert_called_once_with(db_path, query)
 
     def test_search_local_no_embeddings(self, db_path, capsys):
-        """Verify empty results don't cause errors.
+        """Verify empty results show closest match info.
 
-        Tests that when vector search returns no results,
-        the function displays a user-friendly message and doesn't raise.
+        Tests that when vector search returns no results within threshold,
+        the function displays closest match info.
         """
         query = "nonexistent topic"
 
@@ -105,25 +106,29 @@ class TestSearchLocalOnly:
             ) as mock_search_emb,
         ):
             mock_gen_emb.return_value = mock_embedding
-            mock_search_emb.return_value = []
+            # Return a result with distance above threshold (0.1)
+            mock_search_emb.return_value = [
+                {"title": "Closest", "distance": 0.5, "type": "article"}
+            ]
 
-            _search_local_only(db_path, query, keyword=False)
+            _search_local_only(db_path, query, keyword=False, text_output=True)
 
-            # Should complete without error and print "No results found"
+            # Should show no results within threshold and closest match
             captured = capsys.readouterr()
-            assert "No results found in local database" in captured.out
+            assert "No results found within threshold" in captured.out
 
     def test_search_local_keyword_no_results(self, db_path, capsys):
         """Verify keyword search handles empty results properly."""
         query = "nonexistent topic"
 
-        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
+        # Mock search_papers at the correct location
+        with patch("raven.storage.paper.search_papers") as mock_search_papers:
             mock_search_papers.return_value = []
 
-            _search_local_only(db_path, query, keyword=True)
+            _search_local_only(db_path, query, keyword=True, text_output=True)
 
             captured = capsys.readouterr()
-            assert "No results found in local database" in captured.out
+            assert "No results found" in captured.out
 
     def test_search_local_vector_with_results(self, db_path, capsys):
         """Verify vector search displays results when found."""
@@ -149,7 +154,7 @@ class TestSearchLocalOnly:
             mock_gen_emb.return_value = mock_embedding
             mock_search_emb.return_value = mock_results
 
-            _search_local_only(db_path, query, keyword=False)
+            _search_local_only(db_path, query, keyword=False, text_output=True)
 
             captured = capsys.readouterr()
             assert "Test Paper Title" in captured.out
@@ -167,10 +172,11 @@ class TestSearchLocalOnly:
             }
         ]
 
-        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
+        # Mock search_papers at the correct location
+        with patch("raven.storage.paper.search_papers") as mock_search_papers:
             mock_search_papers.return_value = mock_results
 
-            _search_local_only(db_path, query, keyword=True)
+            _search_local_only(db_path, query, keyword=True, text_output=True)
 
             captured = capsys.readouterr()
             assert "Test Paper Title" in captured.out

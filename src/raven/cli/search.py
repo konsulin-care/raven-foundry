@@ -67,13 +67,19 @@ def _resolve_db_path(
     "--local",
     is_flag=True,
     default=False,
-    help="Search local database instead of OpenAlex",
+    help="Search local database only (no OpenAlex)",
 )
 @click.option(
     "--local-keyword",
     is_flag=True,
     default=False,
     help="Use keyword search (LIKE matching) instead of vector search for local search",
+)
+@click.option(
+    "--text",
+    is_flag=True,
+    default=False,
+    help="Display results as text instead of JSON",
 )
 @click.option(
     "--semantic/--keyword",
@@ -92,21 +98,19 @@ def search(
     use_semantic: bool,
     local: bool,
     local_keyword: bool,
+    text: bool,
 ) -> None:
     """Search publications by query string.
 
-    Uses local database with OpenAlex fallback by default.
-    Set --local to search local database only.
+    Searches OpenAlex by default. Use --local for local database search.
 
     Examples:
         raven search "machine learning"
-            → local vector → OpenAlex semantic fallback
-        raven search "machine learning" --local-keyword
-            → local keyword → OpenAlex keyword fallback
+            → search OpenAlex (default)
         raven search "machine learning" --local
-            → local vector only
-        raven search "machine learning" --local --local-keyword
-            → local keyword only
+            → search local database
+        raven search "machine learning" --text
+            → display as formatted text
         raven search "machine learning" --filter "publication_year:>2020" --page 2
     """
     db_path = _resolve_db_path(env, db)
@@ -122,4 +126,5 @@ def search(
         page=page,
         per_page=per_page,
         sort=sort,
+        text_output=text,
     )
