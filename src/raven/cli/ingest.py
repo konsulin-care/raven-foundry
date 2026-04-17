@@ -95,7 +95,8 @@ def ingest(
         ) as bar:
             for i, entry in enumerate(valid_entries, 1):
                 identifier = entry["_identifier"]
-                assert identifier is not None, "Valid entry must have identifier"
+                if identifier is None:
+                    raise ValueError("Entry missing required identifier")
                 ingest_paper(db_path, identifier)
                 bar.update(1)
 

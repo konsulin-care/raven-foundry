@@ -114,7 +114,8 @@ def add_paper(
                 )
             conn.commit()
             result = cursor.lastrowid
-            assert result is not None, "Insert should return last rowid"
+            if result is None:
+                raise RuntimeError("Failed to insert paper: no rowid returned")
 
             # Add authors to junction table if provided
             if authors_data:
