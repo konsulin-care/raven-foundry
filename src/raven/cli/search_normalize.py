@@ -84,7 +84,7 @@ def normalize_openalex(
     return {
         "title": formatted.get("title", "Untitled"),
         "identifier": formatted.get("identifier"),
-        "year": formatted.get("publication_year"),
+        "year": formatted.get("year") or formatted.get("publication_year"),
         "type": formatted.get("type", "article"),
         "abstract": formatted.get("abstract"),
         "authors": work.get("authorships"),
