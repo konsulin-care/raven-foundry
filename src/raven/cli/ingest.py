@@ -96,7 +96,7 @@ def ingest(
             for i, entry in enumerate(valid_entries, 1):
                 identifier = entry["_identifier"]
                 assert identifier is not None, "Valid entry must have identifier"
-                result = ingest_paper(db_path, identifier)
+                ingest_paper(db_path, identifier)
                 bar.update(1)
 
         click.echo(f"Successfully ingested {total_valid} publications.")
