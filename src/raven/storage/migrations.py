@@ -3,6 +3,7 @@
 Handles schema migrations and backward compatibility.
 """
 
+import hashlib
 import logging
 import sqlite3
 
@@ -104,10 +105,7 @@ def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
         author_names = [n.strip() for n in authors_text.split(",") if n.strip()]
 
         for order, name in enumerate(author_names):
-            # Generate a stable ID from the name (hash-based for uniqueness)
-            import hashlib
-
-            author_id = "A" + hashlib.md5(name.encode()).hexdigest()[:10].upper()
+            author_id = "A" + hashlib.sha256(name.encode()).hexdigest()[:10].upper()
 
             # Insert into authors table
             conn.execute(

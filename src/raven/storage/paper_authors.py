@@ -4,6 +4,7 @@ Handles normalized author schema with authors + paper_authors tables.
 """
 
 import contextlib
+import hashlib
 import logging
 import sqlite3
 from pathlib import Path
@@ -25,9 +26,7 @@ def _get_author_id_from_orcid(orcid: str | None) -> str:
         # ORCID is already linked to an OpenAlex author ID
         # We store the orcid and will resolve to author ID via lookup
         return orcid.replace("https://orcid.org/", "").replace("0000-", "A0000-")
-    import hashlib
-
-    return "A" + hashlib.md5().hexdigest()[:10].upper()
+    return "A" + hashlib.sha256().hexdigest()[:10].upper()
 
 
 def add_author(
@@ -163,12 +162,10 @@ def convert_authors_to_data(
     if not authors:
         return None
 
-    import hashlib
-
     author_names = [n.strip() for n in authors.split(",") if n.strip()]
     authors_data = []
     for idx, name in enumerate(author_names):
-        author_id = "A" + hashlib.md5(name.encode()).hexdigest()[:10].upper()
+        author_id = "A" + hashlib.sha256(name.encode()).hexdigest()[:10].upper()
         authors_data.append(
             {
                 "id": author_id,
