@@ -63,7 +63,7 @@ def search_with_fallback(
         _search_local_only(db_path, query, keyword, text_output)
     else:
         _search_openalex(
-            db_path, query, filter_str, page, per_page, sort, use_semantic, text_output
+            db_path, query, filter_str, page, per_page, use_semantic, text_output
         )
 
 
@@ -96,7 +96,6 @@ def _search_openalex(
     filter_str: str | None,
     page: int,
     per_page: int,
-    sort: str,
     use_semantic: bool,
     text_output: bool,
 ) -> None:

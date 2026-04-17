@@ -126,7 +126,6 @@ class TestSearchOpenAlex:
                 filter_str=None,
                 page=1,
                 per_page=10,
-                sort="relevance_score:desc",
                 use_semantic=True,
                 text_output=True,
             )
@@ -163,7 +162,6 @@ class TestSearchOpenAlex:
                 filter_str=None,
                 page=1,
                 per_page=10,
-                sort="relevance_score:desc",
                 use_semantic=True,
                 text_output=True,
             )
