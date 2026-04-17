@@ -41,7 +41,7 @@ def add_embedding(
     paper_id: int,
     embedding: list[float],
     text: str,
-    type: str,
+    content_type: str,
 ) -> None:
     """Add vector embedding for a paper.
 
@@ -50,7 +50,7 @@ def add_embedding(
         paper_id: ID of the paper to associate the embedding with.
         embedding: 384-dimensional embedding vector.
         text: Original text being embedded.
-        type: Type of text (one of: title, abstract, abstract chunk, full text summary, section summary, section chunk).
+        content_type: Type of text (one of: title, abstract, abstract chunk, full text summary, section summary, section chunk).
 
     Raises:
         ValueError: If the embedding vector length doesn't match expected dimension.
@@ -76,7 +76,7 @@ def add_embedding(
         embedding_json = json.dumps(embedding)
         conn.execute(
             "INSERT OR REPLACE INTO embeddings (paper_id, embedding, text, type) VALUES (?, vector_as_f32(?), ?, ?)",
-            (paper_id, embedding_json, text, type),
+            (paper_id, embedding_json, text, content_type),
         )
         conn.commit()
 

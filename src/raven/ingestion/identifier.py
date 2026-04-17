@@ -42,47 +42,55 @@ def normalize_identifier(identifier: str) -> str:
     Returns:
         Normalized identifier with explicit prefix for OpenAlex API.
     """
-    id = identifier.strip()
+    normalized_id = identifier.strip()
 
     # Already has explicit prefix
     for prefix in ("doi:", "openalex:", "pmid:", "mag:"):
-        if id.lower().startswith(prefix):
-            return id.lower()
+        if normalized_id.lower().startswith(prefix):
+            return normalized_id.lower()
 
     # DOI URL pattern (contains doi.org/)
-    if "doi.org/" in id.lower():
-        cleaned = id.lower().replace(_DOI_URL_PREFIX, "").replace("http://doi.org/", "")
+    if "doi.org/" in normalized_id.lower():
+        cleaned = (
+            normalized_id.lower()
+            .replace(_DOI_URL_PREFIX, "")
+            .replace("http://doi.org/", "")
+        )
         return f"doi:{cleaned}"
 
     # OpenAlex URL
-    if "openalex.org/" in id.lower():
+    if "openalex.org/" in normalized_id.lower():
         cleaned = (
-            id.lower()
+            normalized_id.lower()
             .replace("https://openalex.org/", "")
             .replace("http://openalex.org/", "")
         )
         return f"openalex:{cleaned}"
 
     # PubMed URL
-    if "pubmed.ncbi.nlm.nih.gov/" in id.lower():
-        cleaned = id.lower().replace("https://pubmed.ncbi.nlm.nih.gov/", "")
+    if "pubmed.ncbi.nlm.nih.gov/" in normalized_id.lower():
+        cleaned = normalized_id.lower().replace("https://pubmed.ncbi.nlm.nih.gov/", "")
         return f"pmid:{cleaned}"
 
     # DOI pattern (contains /)
-    if "/" in id:
-        return f"doi:{id.lower()}"
+    if "/" in normalized_id:
+        return f"doi:{normalized_id.lower()}"
 
     # PMID (digits only, 7+ digits)
-    if id.isdigit() and len(id) >= 7:
-        return f"pmid:{id}"
+    if normalized_id.isdigit() and len(normalized_id) >= 7:
+        return f"pmid:{normalized_id}"
 
     # MAG (digits only)
-    if id.isdigit():
-        return f"mag:{id}"
+    if normalized_id.isdigit():
+        return f"mag:{normalized_id}"
 
     # OpenAlex ID (starts with W followed by digits)
-    if id.upper().startswith("W") and len(id) > 1 and id[1:].isdigit():
-        return f"openalex:{id.upper()}"
+    if (
+        normalized_id.upper().startswith("W")
+        and len(normalized_id) > 1
+        and normalized_id[1:].isdigit()
+    ):
+        return f"openalex:{normalized_id.upper()}"
 
     # Default to OpenAlex ID (warn user to use explicit prefix)
     logger.warning(
@@ -90,4 +98,4 @@ def normalize_identifier(identifier: str) -> str:
         "Use explicit prefix (doi:, openalex:, pmid:, mag:) for clarity.",
         identifier,
     )
-    return f"openalex:{id.upper()}"
+    return f"openalex:{normalized_id.upper()}"

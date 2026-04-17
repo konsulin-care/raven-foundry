@@ -54,7 +54,9 @@ class TestAddEmbeddingWithFixture:
         embedding = [0.1] * 384
 
         # Should not raise ValueError
-        add_embedding(db_path, paper_id, embedding, text="Test Paper", type="title")
+        add_embedding(
+            db_path, paper_id, embedding, text="Test Paper", content_type="title"
+        )
 
     def test_add_embedding_dimension_mismatch(self, db_path):
         """add_embedding raises ValueError for wrong dimension."""
@@ -69,7 +71,11 @@ class TestAddEmbeddingWithFixture:
 
         with pytest.raises(ValueError, match="dimension mismatch"):
             add_embedding(
-                db_path, paper_id, wrong_embedding, text="Test Paper", type="title"
+                db_path,
+                paper_id,
+                wrong_embedding,
+                text="Test Paper",
+                content_type="title",
             )
 
     def test_add_embedding_dimension_383_raises(self, db_path):
@@ -84,7 +90,11 @@ class TestAddEmbeddingWithFixture:
 
         with pytest.raises(ValueError, match="dimension mismatch"):
             add_embedding(
-                db_path, paper_id, wrong_embedding, text="Test Paper", type="title"
+                db_path,
+                paper_id,
+                wrong_embedding,
+                text="Test Paper",
+                content_type="title",
             )
 
     def test_add_embedding_dimension_385_raises(self, db_path):
@@ -99,5 +109,9 @@ class TestAddEmbeddingWithFixture:
 
         with pytest.raises(ValueError, match="dimension mismatch"):
             add_embedding(
-                db_path, paper_id, wrong_embedding, text="Test Paper", type="title"
+                db_path,
+                paper_id,
+                wrong_embedding,
+                text="Test Paper",
+                content_type="title",
             )

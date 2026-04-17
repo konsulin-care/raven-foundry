@@ -83,7 +83,7 @@ class TestIngestPaper:
         assert call_args[0][1] == 42
         assert call_args[0][2] == [0.1] * 384
         assert call_args[0][3] == "Test Paper"
-        assert call_args[0][4] == "title"
+        assert call_args[1]["content_type"] == "title"
 
     @patch("raven.storage.add_embedding")
     @patch("raven.ingestion.pipeline.generate_embedding")

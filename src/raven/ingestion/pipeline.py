@@ -89,7 +89,9 @@ def _store_paper_with_embedding(
 
     if embedding is not None and embedding_text is not None:
         try:
-            add_embedding(db_path, paper_id, embedding, embedding_text, "title")
+            add_embedding(
+                db_path, paper_id, embedding, embedding_text, content_type="title"
+            )
         except Exception as e:
             logger.warning("Failed to store embedding: %s", e)
 
