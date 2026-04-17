@@ -121,7 +121,7 @@ class TestFilterValidEntries:
         """filter_valid_entries adds _identifier to valid entries."""
 
         entries = [{"doi": "10.1234/test", "title": "Paper 1"}]
-        valid, invalid = filter_valid_entries(entries)
+        valid, _ = filter_valid_entries(entries)
 
         assert valid[0].get("_identifier") == "doi:10.1234/test"
 

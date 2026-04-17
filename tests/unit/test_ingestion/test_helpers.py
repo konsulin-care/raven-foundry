@@ -178,7 +178,7 @@ class TestPreparePaperInfo:
             "id": "https://openalex.org/W123456",
         }
 
-        paper_info, embedding_text = prepare_paper_info(work)
+        paper_info, _ = prepare_paper_info(work)
 
         assert paper_info["identifier"] == "openalex:W123456"
         assert paper_info["title"] == "Test Paper"

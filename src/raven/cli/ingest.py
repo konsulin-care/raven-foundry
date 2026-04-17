@@ -71,7 +71,7 @@ def ingest(
         entries = parse_bibtex_file(bib)
 
         # Step 2: Filter valid entries
-        valid_entries, invalid_entries = filter_valid_entries(entries)
+        valid_entries, _ = filter_valid_entries(entries)
         total_valid = len(valid_entries)
         total_entries = len(entries)
 
