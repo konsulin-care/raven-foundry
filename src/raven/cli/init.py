@@ -5,20 +5,8 @@ from typing import Optional
 
 import click
 
-from raven.paths import get_data_dir, load_config
+from raven.cli.resolver import resolve_db_path
 from raven.storage import init_database
-
-
-def _resolve_db_path(
-    env_path: Optional[Path] = None, db_path: Optional[Path] = None
-) -> Path:
-    """Resolve database path with proper precedence."""
-    load_config(env_path)
-
-    if db_path is not None:
-        return db_path
-
-    return get_data_dir() / "raven.db"
 
 
 @click.command()
@@ -38,7 +26,7 @@ def _resolve_db_path(
 )
 def init(db: Optional[Path], env: Optional[Path]) -> None:
     """Initialize the database."""
-    db_path = _resolve_db_path(env, db)
+    db_path = resolve_db_path(env, db)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     init_database(db_path)

@@ -6,7 +6,8 @@ from typing import Optional
 
 import click
 
-from raven.paths import get_data_dir, load_config
+from raven.cli.resolver import resolve_db_path
+from raven.paths import get_data_dir
 
 
 def _format_size(size_bytes: float) -> str:
@@ -28,18 +29,6 @@ def _get_version() -> str:
         return "dev"
 
 
-def _resolve_db_path(
-    env_path: Optional[Path] = None, db_path: Optional[Path] = None
-) -> Path:
-    """Resolve database path with proper precedence."""
-    load_config(env_path)
-
-    if db_path is not None:
-        return db_path
-
-    return get_data_dir() / "raven.db"
-
-
 @click.command()
 @click.option(
     "--db",
@@ -57,7 +46,7 @@ def _resolve_db_path(
 )
 def info(db: Optional[Path], env: Optional[Path]) -> None:
     """Show details about the current Raven configuration."""
-    db_path = _resolve_db_path(env, db)
+    db_path = resolve_db_path(env, db)
     data_dir = get_data_dir()
 
     # Get total unique identifiers

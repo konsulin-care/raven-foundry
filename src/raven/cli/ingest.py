@@ -5,21 +5,9 @@ from typing import Any, Optional
 
 import click
 
+from raven.cli.resolver import resolve_db_path
 from raven.ingestion import ingest_paper
 from raven.ingestion.bibtex import filter_valid_entries, parse_bibtex_file
-from raven.paths import get_data_dir, load_config
-
-
-def _resolve_db_path(
-    env_path: Optional[Path] = None, db_path: Optional[Path] = None
-) -> Path:
-    """Resolve database path with proper precedence."""
-    load_config(env_path)
-
-    if db_path is not None:
-        return db_path
-
-    return get_data_dir() / "raven.db"
 
 
 @click.command()
@@ -57,7 +45,7 @@ def ingest(
         raven ingest doi:10.5281/zenodo.18201069
         raven ingest --bib references.bib
     """
-    db_path = _resolve_db_path(env, db)
+    db_path = resolve_db_path(env, db)
 
     if not db_path.parent.exists():
         db_path.parent.mkdir(parents=True, exist_ok=True)

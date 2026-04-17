@@ -5,21 +5,9 @@ from typing import Optional
 
 import click
 
+from raven.cli.resolver import resolve_db_path
 from raven.cli.search_orchestrator import search_with_fallback
 from raven.ingestion import DEFAULT_SORT_ORDER
-from raven.paths import get_data_dir, load_config
-
-
-def _resolve_db_path(
-    env_path: Optional[Path] = None, db_path: Optional[Path] = None
-) -> Path:
-    """Resolve database path with proper precedence."""
-    load_config(env_path)
-
-    if db_path is not None:
-        return db_path
-
-    return get_data_dir() / "raven.db"
 
 
 @click.command()
@@ -113,7 +101,7 @@ def search(
             → display as formatted text
         raven search "machine learning" --filter "publication_year:>2020" --page 2
     """
-    db_path = _resolve_db_path(env, db)
+    db_path = resolve_db_path(env, db)
     if not db_path.parent.exists():
         db_path.parent.mkdir(parents=True, exist_ok=True)
     search_with_fallback(

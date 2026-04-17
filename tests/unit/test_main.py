@@ -33,10 +33,10 @@ class TestMainFunctions:
 
     def test_resolve_db_path_explicit(self, tmp_path):
         """Verify explicit --db path takes precedence."""
-        from raven.main import _resolve_db_path
+        from raven.cli.resolver import resolve_db_path
 
         explicit_path = tmp_path / "custom.db"
-        result = _resolve_db_path(db_path=explicit_path)
+        result = resolve_db_path(db_path=explicit_path)
 
         assert result == explicit_path
 
@@ -48,9 +48,9 @@ class TestMainFunctions:
         test_data_dir.mkdir()
         env_file.write_text(f"RAVEN_DATA_DIR={test_data_dir}\n")
 
-        from raven.main import _resolve_db_path
+        from raven.cli.resolver import resolve_db_path
 
-        result = _resolve_db_path(env_path=env_file)
+        result = resolve_db_path(env_path=env_file)
 
         assert str(result).endswith("raven.db")
         assert str(result).startswith(str(test_data_dir))
@@ -63,9 +63,9 @@ class TestMainFunctions:
         from unittest.mock import patch as mock_patch
 
         with mock_patch("raven.paths.find_env_file", return_value=None):
-            from raven.main import _resolve_db_path
+            from raven.cli.resolver import resolve_db_path
 
-            result = _resolve_db_path(env_path=None)
+            result = resolve_db_path(env_path=None)
 
             # Should use default data dir
             assert "raven.db" in str(result)

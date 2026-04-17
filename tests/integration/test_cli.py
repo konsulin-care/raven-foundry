@@ -242,9 +242,8 @@ class TestCLICommands:
         runner = CliRunner()
         db_path = tmp_path / "test.db"
 
-        # Patch _resolve_db_path to return our test database
-        def mock_resolve_db_path(env_path=None, db_path_param=None):
-            return db_path
+        # Set RAVEN_DATA_DIR to our temp directory so the CLI uses it
+        monkeypatch.setenv("RAVEN_DATA_DIR", str(tmp_path))
 
         # Patch ingest_paper to return a successful result
         mock_result = {
@@ -252,11 +251,10 @@ class TestCLICommands:
             "title": "Test Research Paper",
             "type": "article",
         }
-        with patch("raven.cli.ingest._resolve_db_path", mock_resolve_db_path):
-            with patch("raven.cli.ingest.ingest_paper", lambda db, doi: mock_result):
-                result = runner.invoke(
-                    raven.main.cli, ["ingest", "10.1234/test", "--db", str(db_path)]
-                )
+        with patch("raven.cli.ingest.ingest_paper", lambda db, doi: mock_result):
+            result = runner.invoke(
+                raven.main.cli, ["ingest", "10.1234/test", "--db", str(db_path)]
+            )
 
         assert result.exit_code == 0
         assert "Ingesting: 10.1234/test" in result.output
@@ -267,16 +265,14 @@ class TestCLICommands:
         runner = CliRunner()
         db_path = tmp_path / "test.db"
 
-        # Patch _resolve_db_path to return our test database
-        def mock_resolve_db_path(env_path=None, db_path_param=None):
-            return db_path
+        # Set RAVEN_DATA_DIR to our temp directory so the CLI uses it
+        monkeypatch.setenv("RAVEN_DATA_DIR", str(tmp_path))
 
         # Patch ingest_paper to return None (failure case)
-        with patch("raven.cli.ingest._resolve_db_path", mock_resolve_db_path):
-            with patch("raven.cli.ingest.ingest_paper", lambda db, identifier: None):
-                result = runner.invoke(
-                    raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
-                )
+        with patch("raven.cli.ingest.ingest_paper", lambda db, identifier: None):
+            result = runner.invoke(
+                raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
+            )
 
         assert result.exit_code == 0
         assert "Ingesting: 10.9999/failure" in result.output
