@@ -237,6 +237,46 @@ class TestCLICommands:
         assert "'papers' table not found" in result.output
         assert "Total papers indexed: 0" in result.output
 
+    def test_info_command_other_operational_error_re_raised(
+        self, tmp_path, monkeypatch
+    ):
+        """Test 'raven info' re-raises OperationalError for non-missing table errors."""
+        import unittest.mock as mock
+
+        runner = CliRunner()
+        db_path = tmp_path / "raven.db"
+
+        # Create an empty database file
+        db_path.touch()
+
+        monkeypatch.setattr(raven.paths, "get_data_dir", lambda: tmp_path)
+
+        class MockConn:
+            def __init__(self, error_msg):
+                self.error_msg = error_msg
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def execute(self, sql, *args, **kwargs):
+                raise sqlite3.OperationalError(self.error_msg)
+
+        # Create mock connection that raises "database is locked" error
+        def create_mock_conn(path, **kwargs):
+            return MockConn("database is locked")
+
+        with mock.patch("raven.cli.info.sqlite3.connect", side_effect=create_mock_conn):
+            result = runner.invoke(raven.main.cli, ["info", "--db", str(db_path)])
+
+        # Should fail with the OperationalError propagated
+        assert result.exit_code == 1
+        assert result.exception is not None
+        assert isinstance(result.exception, sqlite3.OperationalError)
+        assert "database is locked" in str(result.exception)
+
     def test_ingest_command_success(self, tmp_path, monkeypatch):
         """Test 'raven ingest' with successful API response."""
         runner = CliRunner()

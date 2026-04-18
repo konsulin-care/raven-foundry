@@ -56,11 +56,14 @@ def info(db: Optional[Path], env: Optional[Path]) -> None:
             with sqlite3.connect(db_path) as conn:
                 cursor = conn.execute("SELECT COUNT(DISTINCT identifier) FROM papers")
                 total_papers = cursor.fetchone()[0]
-        except sqlite3.OperationalError:
-            click.echo(
-                "Warning: Database exists but 'papers' table not found.", err=True
-            )
-            total_papers = 0
+        except sqlite3.OperationalError as e:
+            if "no such table: papers" in str(e).lower():
+                click.echo(
+                    "Warning: Database exists but 'papers' table not found.", err=True
+                )
+                total_papers = 0
+            else:
+                raise
 
     click.echo(f"Version: {_get_version()}")
     click.echo(f"Data directory: {data_dir}")
