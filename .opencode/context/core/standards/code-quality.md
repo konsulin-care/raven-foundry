@@ -114,6 +114,8 @@ assert conn is not None  # DANGEROUS in production
    connection = cast(sqlite3.Connection, conn)
    ```
 
+   **Warning**: `cast()` does **nothing at runtime** — it's purely for static type checkers. If `conn` is not actually a `sqlite3.Connection`, `cast()` will happily return the wrong value (e.g., `None`). Use `cast()` only when you are certain the value is of the target type.
+
 2. **Use explicit exception for true runtime validation**:
    ```python
    if conn is None:

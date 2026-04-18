@@ -86,7 +86,9 @@ def extract_paper_metadata(work: dict[str, Any]) -> dict[str, Any]:
         "authors": authors,
         "authors_data": authors_data,
         "year": work.get("publication_year"),
-        "source": work.get("host_venue", {}).get("display_name"),
+        "source": work.get("primary_location", {})
+        .get("source", {})
+        .get("display_name"),
     }
 
 

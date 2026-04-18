@@ -119,9 +119,10 @@ def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
         "identifier": final_identifier,
         "title": title,
         "authors": metadata["authors"],
+        "authors_data": metadata.get("authors_data"),
         "abstract": abstract,
-        "year": metadata.get("publication_year"),
-        "source": metadata.get("venue"),
+        "year": metadata.get("year"),
+        "source": metadata.get("source"),
         "paper_type": paper_type,
     }
 

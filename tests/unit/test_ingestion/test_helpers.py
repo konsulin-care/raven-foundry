@@ -137,7 +137,7 @@ class TestPreparePaperInfo:
             "type": "article",
             "publication_year": 2024,
             "authorships": [],
-            "host_venue": {},
+            "primary_location": {},
             "id": "https://openalex.org/W123",
         }
 
@@ -165,11 +165,11 @@ class TestPreparePaperInfo:
         assert paper_info["authors"] == "John Doe, Jane Smith"
 
     def test_extracts_venue(self):
-        """Extracts venue from host_venue."""
+        """Extracts venue from primary_location.source."""
         work = {
             "ids": {"doi": "https://doi.org/10.1234/test"},
             "title": "Test Paper",
-            "host_venue": {"display_name": "Test Journal"},
+            "primary_location": {"source": {"display_name": "Test Journal"}},
         }
 
         paper_info, _ = prepare_paper_info(work)
@@ -184,7 +184,7 @@ class TestPreparePaperInfo:
             "type": "article",
             "publication_year": 2024,
             "authorships": [],
-            "host_venue": {},
+            "primary_location": {},
             "id": "https://openalex.org/W123456",
         }
 
