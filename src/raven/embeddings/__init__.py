@@ -114,7 +114,7 @@ def clean_model_cache() -> None:
     _model_loaded = False
 
 
-def generate_embedding(text: str) -> list[float]:
+def generate_embedding(text: Optional[str]) -> list[float]:
     """Generate embedding for a single text using the configured model.
 
     Uses normalize_embeddings=True for cosine similarity compatibility.

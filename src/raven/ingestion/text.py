@@ -25,7 +25,7 @@ def combine_title_abstract(title: str, abstract: str | None) -> str:
     return title
 
 
-def undo_inverted_index(inverted_index: dict[str, list[int]]) -> str:
+def undo_inverted_index(inverted_index: dict[str, list[int]] | None) -> str:
     """Reconstruct original text from OpenAlex abstract_inverted_index.
 
     Optimized implementation - O(n) instead of O(n log n) by using
