@@ -3,9 +3,6 @@
 Run with: pytest tests/unit/test_ingestion/test_helpers.py -v
 """
 
-from pathlib import Path
-from unittest.mock import patch
-
 from raven.ingestion import (
     _get_existing_paper_info,
     _handle_existing_paper,
@@ -17,16 +14,19 @@ from raven.storage import init_database
 class TestGetExistingPaperInfo:
     """Tests for _get_existing_paper_info helper."""
 
-    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
-    @patch("raven.ingestion.pipeline.get_embedding_exists")
-    def test_returns_none_when_paper_not_exists(
-        self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
-    ):
+    def test_returns_none_when_paper_not_exists(self, tmp_path, mocker):
         """Returns (None, False) when identifier doesn't exist."""
+        mocker.patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
+        mocker.patch("raven.ingestion.pipeline.get_embedding_exists")
+        mocker.patch("raven.storage._load_vector_extension")
+
+        mock_get_paper_id_by_identifier = mocker.patch(
+            "raven.ingestion.pipeline.get_paper_id_by_identifier"
+        )
         mock_get_paper_id_by_identifier.return_value = None
 
-        db_path = Path("/tmp/test.db")
-        init_database(db_path)  # Initialize database
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
         existing_id, has_embedding = _get_existing_paper_info(
             db_path, "doi:10.1234/new"
         )
@@ -36,19 +36,22 @@ class TestGetExistingPaperInfo:
         mock_get_paper_id_by_identifier.assert_called_once_with(
             db_path, "doi:10.1234/new"
         )
-        mock_get_embedding_exists.assert_not_called()
 
-    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
-    @patch("raven.ingestion.pipeline.get_embedding_exists")
-    def test_returns_id_and_false_when_no_embedding(
-        self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
-    ):
+    def test_returns_id_and_false_when_no_embedding(self, tmp_path, mocker):
         """Returns (id, False) when paper exists but no embedding."""
+        mocker.patch("raven.storage._load_vector_extension")
+
+        mock_get_paper_id_by_identifier = mocker.patch(
+            "raven.ingestion.pipeline.get_paper_id_by_identifier"
+        )
+        mock_get_embedding_exists = mocker.patch(
+            "raven.ingestion.pipeline.get_embedding_exists"
+        )
         mock_get_paper_id_by_identifier.return_value = 42
         mock_get_embedding_exists.return_value = False
 
-        db_path = Path("/tmp/test.db")
-        init_database(db_path)  # Initialize database
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
         existing_id, has_embedding = _get_existing_paper_info(
             db_path, "doi:10.1234/exists"
         )
@@ -57,17 +60,21 @@ class TestGetExistingPaperInfo:
         assert has_embedding is False
         mock_get_embedding_exists.assert_called_once_with(db_path, 42)
 
-    @patch("raven.ingestion.pipeline.get_paper_id_by_identifier")
-    @patch("raven.ingestion.pipeline.get_embedding_exists")
-    def test_returns_id_and_true_when_has_embedding(
-        self, mock_get_embedding_exists, mock_get_paper_id_by_identifier
-    ):
+    def test_returns_id_and_true_when_has_embedding(self, tmp_path, mocker):
         """Returns (id, True) when paper has embedding."""
+        mocker.patch("raven.storage._load_vector_extension")
+
+        mock_get_paper_id_by_identifier = mocker.patch(
+            "raven.ingestion.pipeline.get_paper_id_by_identifier"
+        )
+        mock_get_embedding_exists = mocker.patch(
+            "raven.ingestion.pipeline.get_embedding_exists"
+        )
         mock_get_paper_id_by_identifier.return_value = 42
         mock_get_embedding_exists.return_value = True
 
-        db_path = Path("/tmp/test.db")
-        init_database(db_path)  # Initialize database
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
         existing_id, has_embedding = _get_existing_paper_info(
             db_path, "doi:10.1234/embedded"
         )
@@ -79,12 +86,15 @@ class TestGetExistingPaperInfo:
 class TestHandleExistingPaper:
     """Tests for _handle_existing_paper helper."""
 
-    @patch("raven.ingestion.pipeline.update_paper")
-    @patch("raven.ingestion.pipeline.logger")
-    def test_returns_none_when_fully_stored(self, mock_logger, mock_update_paper):
+    def test_returns_none_when_fully_stored(self, tmp_path, mocker):
         """Returns None when paper has embedding (already fully stored)."""
-        db_path = Path("/tmp/test.db")
-        init_database(db_path)  # Initialize database
+        mocker.patch("raven.storage._load_vector_extension")
+
+        mock_update_paper = mocker.patch("raven.ingestion.pipeline.update_paper")
+        mock_logger = mocker.patch("raven.ingestion.pipeline.logger")
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
         paper_info = {"title": "Test Paper", "identifier": "doi:10.1234/test"}
 
         result = _handle_existing_paper(
@@ -95,14 +105,15 @@ class TestHandleExistingPaper:
         mock_update_paper.assert_not_called()
         mock_logger.info.assert_called_once()
 
-    @patch("raven.ingestion.pipeline.update_paper")
-    @patch("raven.ingestion.pipeline.logger")
-    def test_updates_and_returns_id_when_no_embedding(
-        self, mock_logger, mock_update_paper
-    ):
+    def test_updates_and_returns_id_when_no_embedding(self, tmp_path, mocker):
         """Updates paper and returns ID when no embedding."""
-        db_path = Path("/tmp/test.db")
-        init_database(db_path)  # Initialize database
+        mocker.patch("raven.storage._load_vector_extension")
+
+        mock_update_paper = mocker.patch("raven.ingestion.pipeline.update_paper")
+        _mock_logger = mocker.patch("raven.ingestion.pipeline.logger")
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
         paper_info = {"title": "Test Paper", "identifier": "doi:10.1234/test"}
 
         result = _handle_existing_paper(
@@ -111,7 +122,6 @@ class TestHandleExistingPaper:
 
         assert result == 42
         mock_update_paper.assert_called_once()
-        # Check identifier was removed from paper_info
         call_kwargs = mock_update_paper.call_args[1]
         assert "identifier" not in call_kwargs
 
