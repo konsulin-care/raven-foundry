@@ -238,7 +238,6 @@ class TestFetchOpenAlexResults:
             _fetch_openalex_results(
                 query="test",
                 filter_str=None,
-                page=1,
                 per_page=10,
                 use_semantic=True,
                 sort=DEFAULT_SORT_ORDER,

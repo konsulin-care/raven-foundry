@@ -101,7 +101,7 @@ def _search_openalex(
 ) -> None:
     """Search OpenAlex and check ingestion status."""
     openalex_results, total = _fetch_openalex_results(
-        query, filter_str, page, per_page, use_semantic, sort
+        query, filter_str, per_page, use_semantic, sort
     )
 
     # Batch check ingestion status (single SQL query)
@@ -162,7 +162,6 @@ def _fetch_local_results(
 def _fetch_openalex_results(
     query: str,
     filter_str: str | None,
-    page: int,
     per_page: int,
     use_semantic: bool,
     sort: str,
