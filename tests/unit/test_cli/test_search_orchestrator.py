@@ -17,6 +17,7 @@ from raven.cli.search_orchestrator import (
     _normalize_openalex,
     _search_openalex,
 )
+from raven.ingestion import DEFAULT_SORT_ORDER
 
 
 class TestSearchConstants:
@@ -127,6 +128,7 @@ class TestSearchOpenAlex:
                 page=1,
                 per_page=10,
                 use_semantic=True,
+                sort=DEFAULT_SORT_ORDER,
                 text_output=True,
             )
 
@@ -163,6 +165,7 @@ class TestSearchOpenAlex:
                 page=1,
                 per_page=10,
                 use_semantic=True,
+                sort=DEFAULT_SORT_ORDER,
                 text_output=True,
             )
 
@@ -238,6 +241,7 @@ class TestFetchOpenAlexResults:
                 page=1,
                 per_page=10,
                 use_semantic=True,
+                sort=DEFAULT_SORT_ORDER,
             )
 
             # Should oversetch - per_page * 2 or 100, whichever is larger

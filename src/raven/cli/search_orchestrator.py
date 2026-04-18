@@ -63,7 +63,7 @@ def search_with_fallback(
         _search_local_only(db_path, query, keyword, text_output)
     else:
         _search_openalex(
-            db_path, query, filter_str, page, per_page, use_semantic, text_output
+            db_path, query, filter_str, page, per_page, use_semantic, sort, text_output
         )
 
 
@@ -97,13 +97,14 @@ def _search_openalex(
     page: int,
     per_page: int,
     use_semantic: bool,
+    sort: str,
     text_output: bool,
 ) -> None:
     """Search OpenAlex and check ingestion status."""
     from raven.cli.search_display import display_json, display_text
 
     openalex_results = _fetch_openalex_results(
-        query, filter_str, page, per_page, use_semantic
+        query, filter_str, page, per_page, use_semantic, sort
     )
 
     # Batch check ingestion status (single SQL query)
@@ -165,7 +166,12 @@ def _fetch_local_results(
 
 
 def _fetch_openalex_results(
-    query: str, filter_str: str | None, page: int, per_page: int, use_semantic: bool
+    query: str,
+    filter_str: str | None,
+    page: int,
+    per_page: int,
+    use_semantic: bool,
+    sort: str,
 ) -> list[dict[str, Any]]:
     """Fetch OpenAlex results."""
     oversfetch_per_page = max(per_page * 2, 100)
@@ -174,7 +180,7 @@ def _fetch_openalex_results(
         filter_str=filter_str,
         page=page,
         per_page=oversfetch_per_page,
-        sort="relevance_score:desc",
+        sort=sort,
         use_semantic=use_semantic,
     )
     results = result_data.get("results", [])
