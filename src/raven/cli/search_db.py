@@ -15,18 +15,31 @@ def check_batch_ingested(db_path: Path, results: list[dict[str, Any]]) -> set[st
 
     Returns:
         Set of lowercase identifiers that are already ingested.
+        Returns empty set if DB or table is missing.
     """
     identifiers = [r["identifier"].lower() for r in results if r.get("identifier")]
     if not identifiers:
         return set()
 
-    with contextlib.closing(sqlite3.connect(db_path)) as conn:
-        placeholders = ",".join(["?"] * len(identifiers))
-        cursor = conn.execute(
-            f"SELECT LOWER(identifier) FROM papers WHERE LOWER(identifier) IN ({placeholders})",
-            identifiers,
-        )
-        return {row[0] for row in cursor.fetchall()}
+    if not db_path.exists():
+        return set()
+
+    try:
+        with contextlib.closing(sqlite3.connect(db_path)) as conn:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='papers'"
+            )
+            if not cursor.fetchone():
+                return set()
+
+            placeholders = ",".join(["?"] * len(identifiers))
+            cursor = conn.execute(
+                f"SELECT LOWER(identifier) FROM papers WHERE LOWER(identifier) IN ({placeholders})",
+                identifiers,
+            )
+            return {row[0] for row in cursor.fetchall()}
+    except (sqlite3.OperationalError, OSError):
+        return set()
 
 
 def search_papers_keyword(db_path: Path, query: str) -> list[dict[str, Any]]:
