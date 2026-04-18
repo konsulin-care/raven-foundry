@@ -109,7 +109,7 @@ class TestCLICommands:
         runner = CliRunner()
 
         # Mock OpenAlex API to return results with abstract
-        with patch("raven.ingestion.search.search_works") as mock_search:
+        with patch("raven.ingestion.search_works") as mock_search:
             mock_search.return_value = {
                 "results": [
                     {

@@ -93,12 +93,10 @@ def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
         return
 
     # Perform migration: parse comma-separated authors
-    papers_with_authors = conn.execute(
-        """
+    papers_with_authors = conn.execute("""
         SELECT id, authors FROM papers
         WHERE authors IS NOT NULL AND authors != ''
-        """
-    ).fetchall()
+        """).fetchall()
 
     for paper_id, authors_text in papers_with_authors:
         # Parse comma-separated author names

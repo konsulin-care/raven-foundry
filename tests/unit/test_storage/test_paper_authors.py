@@ -32,6 +32,7 @@ class TestGetAuthorIdFromOrcid:
         """None input generates a valid SHA-256 based ID (not tested for exact value)."""
         result1 = _get_author_id_from_orcid(None)
         result2 = _get_author_id_from_orcid(None)
+        assert result1 == result2
         assert result1.startswith("A")
         assert len(result1) == 11
         assert result2.startswith("A")
