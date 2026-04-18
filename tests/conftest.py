@@ -1,6 +1,7 @@
 """Pytest configuration and fixtures for Raven Foundry tests."""
 
 import os
+import sqlite3
 from pathlib import Path
 from typing import Generator
 
@@ -97,3 +98,36 @@ def mock_api_keys(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None
     # Restore original environment
     os.environ.clear()
     os.environ.update(original_env)
+
+
+@pytest.fixture
+def db_path_with_schema(tmp_path):
+    """Create test database with authors and paper_authors tables."""
+    db_path = tmp_path / "test.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS papers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                identifier TEXT NOT NULL,
+                title TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS authors (
+                id TEXT PRIMARY KEY,
+                orcid TEXT,
+                name TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS paper_authors (
+                paper_id INTEGER NOT NULL,
+                author_id TEXT NOT NULL,
+                author_order INTEGER NOT NULL,
+                is_corresponding INTEGER DEFAULT 0,
+                PRIMARY KEY (paper_id, author_id)
+            )
+        """)
+        conn.commit()
+    return db_path
