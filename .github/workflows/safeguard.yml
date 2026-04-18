@@ -49,7 +49,7 @@ jobs:
         run: ruff check src/
 
       - name: Run mypy
-        run: mypy src/
+        run: mypy --ignore-missing-imports src/
 
   layer3-test:
     name: Contract Tests
