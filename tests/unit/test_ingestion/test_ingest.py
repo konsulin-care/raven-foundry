@@ -171,7 +171,7 @@ class TestIngestionModule:
         init_database(db_path)
 
         requests_mock.get(
-            "https://api.openalex.org/works/doi:10.1234/sample",
+            "https://api.openalex.org/works/doi%3A10.1234%2Fsample",
             json=mock_response,
         )
 
@@ -191,7 +191,7 @@ class TestIngestionModule:
         init_database(db_path)
 
         requests_mock.get(
-            "https://api.openalex.org/works/doi:10.9999/missing",
+            "https://api.openalex.org/works/doi%3A10.9999%2Fmissing",
             status_code=404,
         )
 
@@ -211,7 +211,7 @@ class TestIngestionModule:
 
         requests_mock.register_uri(
             "GET",
-            "https://api.openalex.org/works/doi:10.1234/test",
+            "https://api.openalex.org/works/doi%3A10.1234%2Ftest",
             json=mock_response,
         )
 
@@ -236,7 +236,7 @@ class TestIngestionModule:
 
         requests_mock.register_uri(
             "GET",
-            "https://api.openalex.org/works/doi:10.1234/prefix",
+            "https://api.openalex.org/works/doi%3A10.1234%2Fprefix",
             json=mock_response,
         )
 

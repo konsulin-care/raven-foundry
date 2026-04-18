@@ -29,7 +29,7 @@ class TestIngestionRetryLogic:
         # Single 503 response - session has retry logic configured
         # but actual retries require real network or different mock setup
         requests_mock.get(
-            "https://api.openalex.org/works/doi:10.1234/retry",
+            "https://api.openalex.org/works/doi%3A10.1234%2Fretry",
             status_code=503,
         )
 
@@ -49,7 +49,7 @@ class TestIngestionRetryLogic:
         init_database(db_path)
 
         requests_mock.get(
-            "https://api.openalex.org/works/doi:10.1234/ratelimit",
+            "https://api.openalex.org/works/doi%3A10.1234%2Fratelimit",
             status_code=429,
             headers={"Retry-After": "60"},
         )

@@ -10,6 +10,7 @@ Rules:
 import logging
 import time
 from typing import Any, cast
+from urllib.parse import quote
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -85,11 +86,12 @@ def fetch_work(identifier: str) -> dict[str, Any] | None:
     api_key = get_openalex_api_key()
     base_url = _get_openalex_base_url()
 
-    url = f"{base_url}/works/{identifier}?api_key={api_key}"
+    encoded_id = quote(identifier, safe="")
+    url = f"{base_url}/works/{encoded_id}"
 
     session = _create_session_with_retries()
     try:
-        response = session.get(url, timeout=30)
+        response = session.get(url, params={"api_key": api_key}, timeout=30)
     except requests.exceptions.RequestException as e:
         logger.error("Network error fetching paper: %s", e)
         return None
