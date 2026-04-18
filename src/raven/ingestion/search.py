@@ -111,53 +111,6 @@ def search_works(
         return {"results": [], "meta": {"count": 0}, "search_type": search_type}
 
 
-def search_works_keyword(
-    query: str,
-    filter_str: str | None = None,
-    page: int = 1,
-    per_page: int = 50,
-    sort: str = "relevance_score:desc",
-) -> dict[str, Any]:
-    """Keyword-only search (explicit).
-
-    Args:
-        query: Search query string
-        filter_str: Additional OpenAlex filters
-        page: Page number
-        per_page: Results per page (max 100)
-        sort: Sort order
-
-    Returns:
-        Dict with 'results', 'meta', 'search_type'='keyword'
-    """
-    from raven.ingestion.api import DEFAULT_FILTERS
-
-    api_key, base_url, session = get_search_client()
-
-    filters = [DEFAULT_FILTERS]
-    if filter_str:
-        filters.append(filter_str)
-    combined_filter = ",".join(filters)
-
-    url = f"{base_url}/works"
-    params: dict[str, Any] = {
-        "search": query,
-        "filter": combined_filter,
-        "sort": sort,
-        "per_page": min(per_page, 100),
-        "page": page,
-        "api_key": api_key,
-    }
-
-    try:
-        response = session.get(url, params=params, timeout=30)
-        return parse_search_response(response, "keyword")
-
-    except requests.exceptions.RequestException as e:
-        logger.error("Network error during keyword search: %s", e)
-        return {"results": [], "meta": {"count": 0}, "search_type": "keyword"}
-
-
 def search_works_semantic(
     query: str,
     per_page: int = 50,
