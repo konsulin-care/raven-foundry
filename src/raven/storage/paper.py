@@ -112,14 +112,16 @@ def add_paper(
                         paper_type,
                     ),
                 )
-            conn.commit()
             result = cursor.lastrowid
             if result is None:
                 raise RuntimeError("Failed to insert paper: no rowid returned")
 
-            # Add authors to junction table if provided
+            # Add authors to junction table if provided (use same conn for atomic transaction)
             if authors_data:
-                add_paper_authors(db_path, result, authors_data)
+                add_paper_authors(db_path, result, authors_data, conn=conn)
+
+            # Single commit after both paper and author inserts
+            conn.commit()
 
             return result
         except sqlite3.IntegrityError as e:
@@ -163,9 +165,11 @@ def update_paper(
                 paper_id,
             ),
         )
-        conn.commit()
 
-    # Update authors if provided
-    if authors_data is not None:
-        delete_paper_authors(db_path, paper_id)
-        add_paper_authors(db_path, paper_id, authors_data)
+        # Update authors if provided (use same conn for atomic transaction)
+        if authors_data is not None:
+            delete_paper_authors(db_path, paper_id, conn=conn)
+            add_paper_authors(db_path, paper_id, authors_data, conn=conn)
+
+        # Single commit after both paper update and author operations
+        conn.commit()

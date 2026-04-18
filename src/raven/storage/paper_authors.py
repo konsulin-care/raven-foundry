@@ -55,6 +55,7 @@ def add_paper_authors(
     db_path: Path,
     paper_id: int,
     authors_data: list[dict[str, Any]] | None,
+    conn: sqlite3.Connection | None = None,
 ) -> None:
     """Add paper-author relationships to the junction table.
 
@@ -62,13 +63,23 @@ def add_paper_authors(
         db_path: Path to the SQLite database file.
         paper_id: ID of the paper.
         authors_data: List of author data dicts with keys: id, name, orcid, is_corresponding, order.
+        conn: SQLite connection object. If provided, uses this connection (caller controls commit).
+                If None, creates a new connection using db_path and commits internally.
     """
     if not authors_data:
         return
 
-    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+    own_connection = conn is None
+    if own_connection:
+        conn = sqlite3.connect(db_path)
+
+    # Type narrowing: conn is now guaranteed non-None
+    assert conn is not None
+    connection = conn
+
+    try:
         # Check if normalized tables exist (backward compatibility)
-        tables = conn.execute(
+        tables = connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
         table_names = {t[0] for t in tables}
@@ -78,7 +89,7 @@ def add_paper_authors(
 
         for author in authors_data:
             # Ensure author exists in authors table
-            conn.execute(
+            connection.execute(
                 """
                 INSERT OR IGNORE INTO authors (id, orcid, name)
                 VALUES (?, ?, ?)
@@ -91,7 +102,7 @@ def add_paper_authors(
             )
 
             # Add junction entry
-            conn.execute(
+            connection.execute(
                 """
                 INSERT OR REPLACE INTO paper_authors
                     (paper_id, author_id, author_order, is_corresponding)
@@ -104,7 +115,12 @@ def add_paper_authors(
                     author.get("is_corresponding", 0),
                 ),
             )
-        conn.commit()
+        # Commit only if we created the connection; caller controls commit when using external conn
+        if own_connection:
+            connection.commit()
+    finally:
+        if own_connection:
+            connection.close()
 
 
 def get_paper_authors(db_path: Path, paper_id: int) -> list[dict[str, Any]]:
@@ -133,19 +149,37 @@ def get_paper_authors(db_path: Path, paper_id: int) -> list[dict[str, Any]]:
     return results
 
 
-def delete_paper_authors(db_path: Path, paper_id: int) -> None:
+def delete_paper_authors(
+    db_path: Path,
+    paper_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> None:
     """Delete all author relationships for a paper.
 
     Args:
         db_path: Path to the SQLite database file.
         paper_id: ID of the paper.
+        conn: SQLite connection object. If provided, uses this connection (caller controls commit).
+                If None, creates a new connection using db_path and commits internally.
     """
-    with contextlib.closing(sqlite3.connect(db_path)) as conn:
-        conn.execute(
+    own_connection = conn is None
+    if own_connection:
+        conn = sqlite3.connect(db_path)
+
+    # Type narrowing: conn is now guaranteed non-None
+    assert conn is not None
+    connection = conn
+
+    try:
+        connection.execute(
             "DELETE FROM paper_authors WHERE paper_id = ?",
             (paper_id,),
         )
-        conn.commit()
+        if own_connection:
+            connection.commit()
+    finally:
+        if own_connection:
+            connection.close()
 
 
 def convert_authors_to_data(
