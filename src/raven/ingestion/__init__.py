@@ -56,6 +56,8 @@ __all__ = [
     "SEMANTIC_FILTERS",
     "_create_session_with_retries",
     "_get_openalex_base_url",
+    "create_session_with_retries",
+    "get_openalex_base_url",
     "fetch_work",
     # Identifier
     "normalize_doi",
@@ -91,6 +93,7 @@ logger = logging.getLogger(__name__)
 # Module path constants to avoid duplication
 _MODULE_INGESTION_API = "raven.ingestion.api"
 _MODULE_INGESTION_PIPELINE = "raven.ingestion.pipeline"
+_MODULE_INGESTION_SEARCH_UTILS = "raven.ingestion.search_utils"
 _MODULE_INGESTION_TEXT = "raven.ingestion.text"
 _MODULE_STORAGE = "raven.storage"
 
@@ -111,6 +114,14 @@ _LAZY_IMPORTS = {
         "_create_session_with_retries",
     ),
     "_get_openalex_base_url": (_MODULE_INGESTION_API, "_get_openalex_base_url"),
+    "create_session_with_retries": (
+        _MODULE_INGESTION_SEARCH_UTILS,
+        "create_session_with_retries",
+    ),
+    "get_openalex_base_url": (
+        _MODULE_INGESTION_SEARCH_UTILS,
+        "get_openalex_base_url",
+    ),
     "fetch_work": (_MODULE_INGESTION_API, "fetch_work"),
     # Identifier
     "normalize_doi": ("raven.ingestion.identifier", "normalize_doi"),

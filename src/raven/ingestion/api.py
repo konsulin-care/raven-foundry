@@ -8,56 +8,28 @@ Rules:
 """
 
 import logging
-import time
 from typing import Any, cast
 from urllib.parse import quote
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
-from raven.config import get_openalex_api_key, get_openalex_api_url
+from raven.config import get_openalex_api_key
+from raven.ingestion.search_utils import (
+    create_session_with_retries,
+    get_openalex_base_url,
+    rate_limit_semantic,
+)
 
 logger = logging.getLogger(__name__)
 
-# Default filters for search results
 DEFAULT_FILTERS = "is_oa:true"
 SEMANTIC_FILTERS = "is_oa:true"
 
-# Default sort order for search results
 DEFAULT_SORT_ORDER = "relevance_score:desc"
 
-# Rate limiting for semantic search (1 request per second)
-_semantic_last_request_time: float = 0.0
-
-
-def _create_session_with_retries() -> requests.Session:
-    """Create a requests session with retry logic and backoff."""
-    session = requests.Session()
-    retry_strategy = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"],
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    # Only use HTTPS - never fallback to insecure HTTP
-    session.mount("https://", adapter)
-    return session
-
-
-def _get_openalex_base_url() -> str:
-    """Get OpenAlex API base URL from config."""
-    return get_openalex_api_url()
-
-
-def _rate_limit_semantic() -> None:
-    """Apply rate limiting for semantic search."""
-    global _semantic_last_request_time
-    elapsed = time.time() - _semantic_last_request_time
-    if elapsed < 1.0:
-        time.sleep(1.0 - elapsed)
-    _semantic_last_request_time = time.time()
+_create_session_with_retries = create_session_with_retries
+_get_openalex_base_url = get_openalex_base_url
+_rate_limit_semantic = rate_limit_semantic
 
 
 def _parse_search_query(query: str) -> str:

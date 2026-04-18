@@ -7,10 +7,10 @@ import logging
 from typing import Any
 
 from raven.config import get_openalex_api_key
-from raven.ingestion.api import (
-    _create_session_with_retries,
-    _get_openalex_base_url,
-    _rate_limit_semantic,
+from raven.ingestion.search_utils import (
+    create_session_with_retries,
+    get_openalex_base_url,
+    rate_limit_semantic,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,8 @@ def get_search_client() -> tuple[str, Any, Any]:
         Tuple of (api_key, base_url, session).
     """
     api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
-    session = _create_session_with_retries()
+    base_url = get_openalex_base_url()
+    session = create_session_with_retries()
     return api_key, base_url, session
 
 
@@ -51,4 +51,4 @@ def parse_search_response(response: Any, search_type: str) -> dict[str, Any]:
 
 def check_rate_limit_semantic() -> None:
     """Check and enforce rate limit for semantic search."""
-    _rate_limit_semantic()
+    rate_limit_semantic()

@@ -6,12 +6,10 @@ from typing import Any
 import requests
 
 from raven.config import get_openalex_api_key
-from raven.ingestion.api import (
-    DEFAULT_FILTERS,
-    DEFAULT_SORT_ORDER,
-    _create_session_with_retries,
-    _get_openalex_base_url,
-    _parse_search_query,
+from raven.ingestion.api import DEFAULT_FILTERS, DEFAULT_SORT_ORDER, _parse_search_query
+from raven.ingestion.search_utils import (
+    create_session_with_retries,
+    get_openalex_base_url,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,14 +35,14 @@ def search_works_keyword(
         Dict with 'results', 'meta', 'search_type'='keyword'
     """
     api_key = get_openalex_api_key()
-    base_url = _get_openalex_base_url()
+    base_url = get_openalex_base_url()
 
     filters = [DEFAULT_FILTERS]
     if filter_str:
         filters.append(filter_str)
     combined_filter = ",".join(filters)
 
-    session = _create_session_with_retries()
+    session = create_session_with_retries()
     url = f"{base_url}/works"
     params: dict[str, Any] = {
         "search": _parse_search_query(query),

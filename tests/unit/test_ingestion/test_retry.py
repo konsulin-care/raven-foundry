@@ -3,7 +3,8 @@
 Run with: pytest tests/unit/test_ingestion/test_retry.py -v
 """
 
-from raven.ingestion import _create_session_with_retries, ingest_paper
+from raven.ingestion import ingest_paper
+from raven.ingestion.search_utils import create_session_with_retries
 from raven.storage import init_database
 
 
@@ -12,7 +13,7 @@ class TestIngestionRetryLogic:
 
     def test_create_session_with_retries(self):
         """Session is created with retry strategy."""
-        session = _create_session_with_retries()
+        session = create_session_with_retries()
 
         # Check that adapters are mounted
         assert session is not None
