@@ -268,7 +268,55 @@ from raven.config import get_groq_api_key
 from raven.storage import add_paper
 ```
 
-## Anti-Patterns to Avoid
+## Two-Level Lazy Loading Mechanism
+
+Raven uses a two-level lazy loading pattern to optimize CLI startup performance:
+
+### Level 1: CLI-level lazy loading (primary - makes `raven` command fast)
+
+Located in `src/raven/main.py` using Click's `LazyGroup`:
+
+```python
+from raven.cli.lazy_group import LazyGroup
+
+_LAZY_SUBCOMMANDS = {
+    "search": "raven.cli.search:search",
+    "ingest": "raven.cli.ingest:ingest",
+    "init": "raven.cli.init:init",
+}
+
+@click.group(cls=LazyGroup, lazy_subcommands=_LAZY_SUBCOMMANDS)
+def cli(ctx):
+    ...
+```
+
+**Effect**: When user runs `raven search`, only the search module loads - not ingest, init, or other subcommands.
+
+### Level 2: Module-level lazy loading (secondary - for backward compatibility)
+
+Located in `__init__.py` files using `__getattr__`:
+
+```python
+# src/raven/storage/__init__.py
+def __getattr__(name: str) -> object:
+    if name == "add_embedding":
+        from raven.storage.embedding import add_embedding
+        return add_embedding
+    raise AttributeError(...)
+```
+
+**Effect**: Delays importing submodules until first attribute access. Only matters if code explicitly imports from these modules.
+
+### When to use which level
+
+| Scenario | Solution |
+|----------|----------|
+| CLI subcommand not always used | Use `LazyGroup` in `main.py` |
+| Avoid circular imports | Use function-level import (e.g., `config.py`) |
+| Backward compatibility API | Use `__getattr__` in `__init__.py` |
+| Function called on every invocation | Use top-level import (no lazy loading benefit) |
+
+### Anti-Patterns to Avoid
 
 | Anti-Pattern | Solution |
 |--------------|----------|
@@ -279,6 +327,7 @@ from raven.storage import add_paper
 | No type hints | Add type annotations |
 | Magic numbers | Use named constants |
 | Duplicate literals | Use named constants |
+| Lazy import inside frequently-called function | Move to top-level - no benefit, adds overhead |
 
 ## 📂 Codebase References
 **Implementation**:

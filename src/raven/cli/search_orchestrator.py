@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from raven.cli.search_db import check_batch_ingested
+from raven.cli.search_display import display_json, display_text
 from raven.cli.search_normalize import (
     normalize_local_keyword,
     normalize_local_result,
@@ -14,6 +15,7 @@ from raven.cli.search_normalize import (
 from raven.embeddings import generate_embedding
 from raven.ingestion import format_search_result, search_works
 from raven.storage.embedding import search_by_embedding
+from raven.storage.paper import search_papers
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +73,6 @@ def _search_local_only(
     db_path: Path, query: str, keyword: bool, text_output: bool
 ) -> None:
     """Search local database only."""
-    from raven.cli.search_display import display_json, display_text
-    from raven.storage.paper import search_papers
-
     if keyword:
         results = search_papers(db_path, query)
         normalized = [normalize_local_keyword(r) for r in results]
@@ -101,8 +100,6 @@ def _search_openalex(
     text_output: bool,
 ) -> None:
     """Search OpenAlex and check ingestion status."""
-    from raven.cli.search_display import display_json, display_text
-
     openalex_results, total = _fetch_openalex_results(
         query, filter_str, page, per_page, use_semantic, sort
     )
@@ -130,8 +127,6 @@ def _fetch_local_results(
     db_path: Path, query: str, keyword: bool
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     """Fetch local results with distance filter."""
-    from raven.storage.paper import search_papers
-
     if keyword:
         results = search_papers(db_path, query)
         return ([normalize_local_keyword(r) for r in results], None)

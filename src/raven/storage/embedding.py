@@ -12,6 +12,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from raven.storage.db import _load_vector_extension
+
 logger = logging.getLogger(__name__)
 
 # Embedding dimension as per AGENTS.md
@@ -55,8 +57,6 @@ def add_embedding(
     Raises:
         ValueError: If the embedding vector length doesn't match expected dimension.
     """
-    from raven.storage.db import _load_vector_extension
-
     if len(embedding) != EMBEDDING_DIMENSION:
         raise ValueError(
             f"Embedding dimension mismatch: expected {EMBEDDING_DIMENSION}, got {len(embedding)}"
@@ -101,8 +101,6 @@ def search_by_embedding(
     Raises:
         ValueError: If the query embedding dimension doesn't match expected dimension.
     """
-    from raven.storage.db import _load_vector_extension
-
     if len(query_embedding) != EMBEDDING_DIMENSION:
         raise ValueError(
             f"Query embedding dimension mismatch: expected {EMBEDDING_DIMENSION}, got {len(query_embedding)}"

@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Any
 
 from raven.embeddings import generate_embedding, generate_embeddings_batch
+from raven.ingestion.api import fetch_work
+from raven.ingestion.identifier import normalize_identifier
+from raven.ingestion.metadata import extract_paper_metadata, prepare_paper_info
+from raven.ingestion.text import combine_title_abstract
 from raven.storage import (
     add_embedding,
     add_paper,
@@ -100,11 +104,6 @@ def _store_paper_with_embedding(
 
 def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
     """Ingest a paper by identifier from OpenAlex with embedding generation."""
-    from raven.ingestion.api import fetch_work
-    from raven.ingestion.identifier import normalize_identifier
-    from raven.ingestion.metadata import extract_paper_metadata
-    from raven.ingestion.text import combine_title_abstract
-
     normalized = normalize_identifier(identifier)
     work = fetch_work(normalized)
     if work is None:
@@ -147,35 +146,43 @@ def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
     }
 
 
-def ingest_search_results(
-    db_path: Path, search_results: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """Ingest multiple papers from OpenAlex search results."""
-    from raven.ingestion.metadata import prepare_paper_info
-
-    results = search_results.get("results", [])
-    if not results:
-        return []
-
-    papers_data = []
+def _prepare_papers_data(
+    results: list[dict[str, Any]],
+) -> list[tuple[dict[str, Any], str | None]]:
+    """Extract paper info and embedding text from search results."""
+    papers_data: list[tuple[dict[str, Any], str | None]] = []
     for work in results:
         paper_info, embedding_text = prepare_paper_info(work)
         papers_data.append((paper_info, embedding_text))
+    return papers_data
 
-    embeddings = None
+
+def _generate_embeddings_safe(
+    papers_data: list[tuple[dict[str, Any], str | None]],
+) -> list[list[float]] | None:
+    """Generate embeddings for papers, returning None on failure."""
+    embedding_texts = [text for _, text in papers_data if text is not None]
+    if not embedding_texts:
+        return None
     try:
-        embedding_texts = [text for _, text in papers_data]
-        embeddings = generate_embeddings_batch(embedding_texts)
+        return generate_embeddings_batch(embedding_texts)
     except Exception as e:
         logger.warning("Failed to generate embeddings: %s", e)
+        return None
 
+
+def _store_and_build_results(
+    db_path: Path,
+    papers_data: list[tuple[dict[str, Any], str | None]],
+    embeddings: list[list[float]] | None,
+) -> list[dict[str, Any]]:
+    """Store each paper and build results list."""
     ingested = []
     for i, (paper_info, embedding_text) in enumerate(papers_data):
         embedding = embeddings[i] if embeddings is not None else None
         paper_id = _store_paper_with_embedding(
             db_path, paper_info, embedding, embedding_text
         )
-
         ingested.append(
             {
                 "paper_id": paper_id,
@@ -185,5 +192,17 @@ def ingest_search_results(
                 "embedding": embedding,
             }
         )
-
     return ingested
+
+
+def ingest_search_results(
+    db_path: Path, search_results: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Ingest multiple papers from OpenAlex search results."""
+    results = search_results.get("results", [])
+    if not results:
+        return []
+
+    papers_data = _prepare_papers_data(results)
+    embeddings = _generate_embeddings_safe(papers_data)
+    return _store_and_build_results(db_path, papers_data, embeddings)

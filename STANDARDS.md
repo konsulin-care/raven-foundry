@@ -69,6 +69,15 @@ Create `src/raven/<module>/__init__.py` with explicit type annotations:
 - Validate all CLI arguments and API inputs
 - See @.opencode/context/core/standards/code-quality.md for detailed examples and rationale
 
+### Import Guidelines
+
+- **Prefer top-level imports** - Improves runtime performance, no lazy loading benefit inside functions
+- **Exception**: Lazy imports inside functions for:
+  - Circular import avoidance (e.g., `config.py` ↔ `paths.py`)
+  - Expensive operations only needed on first use (e.g., sqlite extension in storage)
+- **CLI lazy loading**: Use `LazyGroup` in `main.py` for subcommand-level lazy loading
+- See @.opencode/context/core/standards/code-quality.md for two-level lazy loading explanation
+
 ### File Size Limits
 
 - **Maximum**: 200 lines per file

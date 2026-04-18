@@ -12,6 +12,11 @@ from typing import Any
 
 import requests
 
+from raven.ingestion.api import (
+    DEFAULT_FILTERS,
+    DEFAULT_SORT_ORDER,
+    SEMANTIC_FILTERS,
+)
 from raven.ingestion.search_client import (
     check_rate_limit_semantic,
     get_search_client,
@@ -26,7 +31,7 @@ def search_works(
     filter_str: str | None = None,
     page: int = 1,
     per_page: int = 50,
-    sort: str = "relevance_score:desc",
+    sort: str = DEFAULT_SORT_ORDER,
     use_semantic: bool = True,
 ) -> dict[str, Any]:
     """Search works via OpenAlex API.
@@ -44,8 +49,6 @@ def search_works(
     Returns:
         Dict with 'results', 'meta' (pagination info), 'search_type' indicator
     """
-    from raven.ingestion.api import DEFAULT_FILTERS, SEMANTIC_FILTERS
-
     api_key, base_url, session = get_search_client()
 
     # Try semantic search first if enabled
@@ -117,17 +120,15 @@ def search_works_semantic(
 ) -> dict[str, Any]:
     """Semantic-only search (explicit).
 
-    Note: Limited to 1 request per second, max 50 results.
+        Note: Limited to 1 request per second, max 50 results.
 
-    Args:
-        query: Semantic search query
-        per_page: Results per page (max 50)
+        Args:
+            query: Semantic search query
+            per_page: Results per page (max 50)
 
     Returns:
-        Dict with 'results', 'meta', 'search_type'='semantic'
+            Dict with 'results', 'meta', search_type='semantic'
     """
-    from raven.ingestion.api import DEFAULT_SORT_ORDER, SEMANTIC_FILTERS
-
     check_rate_limit_semantic()
 
     api_key, base_url, session = get_search_client()

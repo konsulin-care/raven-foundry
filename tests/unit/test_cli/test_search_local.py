@@ -81,8 +81,8 @@ class TestSearchLocalOnly:
         """
         query = "machine learning"
 
-        # Mock search_papers at the correct location (imported inside function)
-        with patch("raven.storage.paper.search_papers") as mock_search_papers:
+        # Mock search_papers at the correct location (now imported at module level)
+        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
             mock_search_papers.return_value = []
 
             _search_local_only(db_path, query, keyword=True, text_output=True)
@@ -174,7 +174,7 @@ class TestSearchLocalOnly:
         ]
 
         # Mock search_papers at the correct location
-        with patch("raven.storage.paper.search_papers") as mock_search_papers:
+        with patch("raven.cli.search_orchestrator.search_papers") as mock_search_papers:
             mock_search_papers.return_value = mock_results
 
             _search_local_only(db_path, query, keyword=True, text_output=True)
