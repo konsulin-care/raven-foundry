@@ -144,15 +144,18 @@ def search_by_embedding(
                     p.ingested_at,
                     e.text,
                     e.type AS embedding_type,
-                    GROUP_CONCAT(a.name, ', ') AS authors,
+                    (
+                        SELECT GROUP_CONCAT(a.name, ', ')
+                        FROM paper_authors pa
+                        JOIN authors a ON pa.author_id = a.id
+                        WHERE pa.paper_id = p.id
+                        ORDER BY pa.author_order
+                    ) AS authors,
                     v.distance
                 FROM embeddings e
                 JOIN papers p ON e.paper_id = p.id
-                LEFT JOIN paper_authors pa ON p.id = pa.paper_id
-                LEFT JOIN authors a ON pa.author_id = a.id
                 JOIN vector_full_scan('embeddings', 'embedding', vector_as_f32(?), ?) AS v
                 ON e.paper_id = v.rowid
-                GROUP BY p.id
                 ORDER BY v.distance
             """,
                 (query_json, top_k),
