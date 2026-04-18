@@ -251,14 +251,15 @@ class TestCLICommands:
             "title": "Test Research Paper",
             "type": "article",
         }
-        with patch("raven.cli.ingest.ingest_paper", lambda db, doi: mock_result):
-            result = runner.invoke(
-                raven.main.cli, ["ingest", "10.1234/test", "--db", str(db_path)]
-            )
+        with patch("raven.cli.ingest.resolve_db_path", return_value=db_path):
+            with patch("raven.cli.ingest.ingest_paper", lambda db, doi: mock_result):
+                result = runner.invoke(
+                    raven.main.cli, ["ingest", "10.1234/test", "--db", str(db_path)]
+                )
 
-        assert result.exit_code == 0
-        assert "Ingesting: 10.1234/test" in result.output
-        assert "Successfully ingested: Test Research Paper" in result.output
+                assert result.exit_code == 0
+                assert "Ingesting: 10.1234/test" in result.output
+                assert "Successfully ingested: Test Research Paper" in result.output
 
     def test_ingest_command_failure(self, tmp_path, monkeypatch):
         """Test 'raven ingest' when API returns failure."""
@@ -269,14 +270,15 @@ class TestCLICommands:
         monkeypatch.setenv("RAVEN_DATA_DIR", str(tmp_path))
 
         # Patch ingest_paper to return None (failure case)
-        with patch("raven.cli.ingest.ingest_paper", lambda db, identifier: None):
-            result = runner.invoke(
-                raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
-            )
+        with patch("raven.cli.ingest.resolve_db_path", return_value=db_path):
+            with patch("raven.cli.ingest.ingest_paper", lambda db, identifier: None):
+                result = runner.invoke(
+                    raven.main.cli, ["ingest", "10.9999/failure", "--db", str(db_path)]
+                )
 
-        assert result.exit_code == 0
-        assert "Ingesting: 10.9999/failure" in result.output
-        assert "Failed to ingest publication" in result.output
+                assert result.exit_code == 0
+                assert "Ingesting: 10.9999/failure" in result.output
+                assert "Failed to ingest publication" in result.output
 
 
 # =============================================================================
