@@ -91,3 +91,26 @@ Never redefine Python built-in names (filter, map, sorted, list, set, dict, type
    ```
 
 **Why this matters**: `filter` is one of Python's most used built-ins. A function parameter named `filter` shadows it globally, making the built-in unreadable within that function's scope and any nested scopes.
+
+## 7. Duplicate Literals *(Requires Exception Process)*
+
+Define a constant instead of duplicating a literal multiple times. Named constants make code more maintainable and prevent inconsistent values.
+   ```python
+   # WRONG (Without Reason) - Duplicate literal
+   def search_works(sort: str = "relevance_score:desc"):
+       ...
+   def search_works_keyword(sort: str = "relevance_score:desc"):
+       ...
+   def search_works_semantic(params: dict = {"sort": "relevance_score:desc"}):
+       ...
+
+   # CORRECT - Use named constant
+   DEFAULT_SORT_ORDER = "relevance_score:desc"
+
+   def search_works(sort: str = DEFAULT_SORT_ORDER):
+       ...
+   def search_works_keyword(sort: str = DEFAULT_SORT_ORDER):
+       ...
+   def search_works_semantic(params: dict = {"sort": DEFAULT_SORT_ORDER}):
+       ...
+   ```

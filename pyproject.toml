@@ -30,6 +30,7 @@ dependencies = [
     "groq",
     "requests",
     "sentence-transformers>=2.0.0",
+    "bibtexparser>=1.0.0,<2.0.0",
 ]
 
 [project.optional-dependencies]

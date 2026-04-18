@@ -63,6 +63,28 @@ Create `src/raven/<module>/__init__.py` with explicit type annotations:
 # 3. Contract reference to AGENTS.md rule
 ```
 
+### Input Validation Rules
+
+- **Never use `assert` for runtime checks** - Always use explicit exceptions or `typing.cast()`
+- Validate all CLI arguments and API inputs
+- See @.opencode/context/core/standards/code-quality.md for detailed examples and rationale
+
+### Import Guidelines
+
+- **Prefer top-level imports** - Improves runtime performance, no lazy loading benefit inside functions
+- **Exception**: Lazy imports inside functions for:
+  - Circular import avoidance (e.g., `config.py` ↔ `paths.py`)
+  - Expensive operations only needed on first use (e.g., sqlite extension in storage)
+- **CLI lazy loading**: Use `LazyGroup` in `main.py` for subcommand-level lazy loading
+- See @.opencode/context/core/standards/code-quality.md for two-level lazy loading explanation
+
+### File Size Limits
+
+- **Maximum**: 200 lines per file
+- **Check command**: `wc -l src/raven/**/*.py`
+- **If exceeded**: Trigger CodeReview agent, then delegate to plan agent using Context7 for refactoring
+- See @.opencode/context/core/standards/code-quality.md for detailed rationale
+
 ---
 
 ## Layer 3: Testing Requirements

@@ -95,6 +95,64 @@ conn.execute(
 doi TEXT UNIQUE NOT NULL COLLATE NOCASE
 ```
 
+## Input Validation
+
+### Never use `assert` for runtime checks
+
+**Problem**: `assert` statements are removed when Python runs with `-O` or `-OO` flags:
+
+```python
+# This check vanishes with python -O
+assert conn is not None  # DANGEROUS in production
+```
+
+**Solution options**:
+
+1. **Use `typing.cast()` for type narrowing** (preferred for static type checkers):
+   ```python
+   from typing import cast
+   connection = cast(sqlite3.Connection, conn)
+   ```
+
+2. **Use explicit exception for true runtime validation**:
+   ```python
+   if conn is None:
+       raise ValueError("Connection must not be None")
+   ```
+
+3. **Use `typing.TYPE_CHECKING`** for type hints only:
+   ```python
+   from typing import TYPE_CHECKING
+   if TYPE_CHECKING:
+       from sqlite3 import Connection
+   ```
+
+### Exception types for validation
+
+| Scenario | Exception | Example |
+|----------|-----------|---------|
+| Wrong type | `TypeError` | Passing `str` when `int` expected |
+| Invalid value | `ValueError` | Number outside valid range |
+| Missing required | `ValueError` | Required argument is None |
+| Not implemented | `NotImplementedError` | Method not yet supported |
+
+### Validation examples
+
+```python
+# Good - explicit validation with clear error
+if not db_path:
+    raise ValueError("db_path is required")
+
+if not isinstance(paper_id, int):
+    raise TypeError(f"paper_id must be int, got {type(paper_id).__name__}")
+
+# Good - use cast for type narrowing (no runtime cost)
+connection = cast(sqlite3.Connection, conn)
+
+# Bad - will be stripped with python -O
+assert conn is not None
+```
+
 ## Naming Conventions
 
 | Element | Convention | Example |
@@ -210,7 +268,55 @@ from raven.config import get_groq_api_key
 from raven.storage import add_paper
 ```
 
-## Anti-Patterns to Avoid
+## Two-Level Lazy Loading Mechanism
+
+Raven uses a two-level lazy loading pattern to optimize CLI startup performance:
+
+### Level 1: CLI-level lazy loading (primary - makes `raven` command fast)
+
+Located in `src/raven/main.py` using Click's `LazyGroup`:
+
+```python
+from raven.cli.lazy_group import LazyGroup
+
+_LAZY_SUBCOMMANDS = {
+    "search": "raven.cli.search:search",
+    "ingest": "raven.cli.ingest:ingest",
+    "init": "raven.cli.init:init",
+}
+
+@click.group(cls=LazyGroup, lazy_subcommands=_LAZY_SUBCOMMANDS)
+def cli(ctx):
+    ...
+```
+
+**Effect**: When user runs `raven search`, only the search module loads - not ingest, init, or other subcommands.
+
+### Level 2: Module-level lazy loading (secondary - for backward compatibility)
+
+Located in `__init__.py` files using `__getattr__`:
+
+```python
+# src/raven/storage/__init__.py
+def __getattr__(name: str) -> object:
+    if name == "add_embedding":
+        from raven.storage.embedding import add_embedding
+        return add_embedding
+    raise AttributeError(...)
+```
+
+**Effect**: Delays importing submodules until first attribute access. Only matters if code explicitly imports from these modules.
+
+### When to use which level
+
+| Scenario | Solution |
+|----------|----------|
+| CLI subcommand not always used | Use `LazyGroup` in `main.py` |
+| Avoid circular imports | Use function-level import (e.g., `config.py`) |
+| Backward compatibility API | Use `__getattr__` in `__init__.py` |
+| Function called on every invocation | Use top-level import (no lazy loading benefit) |
+
+### Anti-Patterns to Avoid
 
 | Anti-Pattern | Solution |
 |--------------|----------|
@@ -220,6 +326,8 @@ from raven.storage import add_paper
 | Bare except | Catch specific exceptions |
 | No type hints | Add type annotations |
 | Magic numbers | Use named constants |
+| Duplicate literals | Use named constants |
+| Lazy import inside frequently-called function | Move to top-level - no benefit, adds overhead |
 
 ## 📂 Codebase References
 **Implementation**:
@@ -229,6 +337,30 @@ from raven.storage import add_paper
 - `src/raven/config.py` - Env var handling
 
 **Tests**: `tests/test_unit.py` - All modules tested
+
+## File Size Management
+
+**Rule**: No single Python file should exceed 200 lines.
+
+**Rationale**:
+- Files under 200 lines are easier to understand, test, debug, and review
+- Large files indicate need for modularization (Single Responsibility Principle)
+- Simplifies onboarding and reduces cognitive load
+
+**Workflow after editing**:
+1. Count lines: `wc -l <file>` or `wc -l src/raven/**/*.py`
+2. If any file > 200 lines:
+   - Call CodeReview subagent to review the code
+   - Delegate to plan agent for refactoring strategy
+   - Use Context7 MCP for refactoring best practices
+3. Apply refactoring, verify tests pass
+
+**Exception criteria** (see @ANTIPATTERN.md):
+- Very small utility modules (<50 lines)
+- Highly cohesive module with many small functions
+- Files that are intentionally monolithic by design
+
+**Context7 usage**: When planning refactoring, query Context7 for Python modularization best practices and module structure recommendations.
 
 ## Related Files
 - Module AGENTS.md files: `src/raven/*/AGENTS.md`

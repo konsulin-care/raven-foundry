@@ -1,12 +1,13 @@
 """Pytest configuration and fixtures for Raven Foundry tests."""
 
 import os
+import sqlite3
 from pathlib import Path
 from typing import Generator
 
 import pytest
 
-import raven.config
+import raven.paths
 
 
 @pytest.fixture(autouse=True)
@@ -29,13 +30,13 @@ def reset_config_cache() -> Generator[None, None, None]:
     for k in test_env_keys:
         os.environ.pop(k, None)
 
-    # Clear the global config cache
-    raven.config._config = {}
+    # Clear the config cache in paths module only
+    raven.paths._config = {}
 
     yield
 
     # Clean up after test
-    raven.config._config = {}
+    raven.paths._config = {}
     # Restore original env vars
     for k, v in original_vals.items():
         if v is not None:
@@ -68,7 +69,7 @@ def mock_env(tmp_path: Path) -> Generator[dict, None, None]:
     yield env_data
 
     # Cleanup
-    raven.config._config = {}
+    raven.paths._config = {}
 
 
 @pytest.fixture
@@ -83,8 +84,8 @@ def mock_api_keys(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None
             # raven.config functions will read from os.environ
             pass
     """
-    # Ensure no .env file is found (override the search path)
-    monkeypatch.setattr(raven.config, "_find_env_file", lambda env_path=None: None)
+    # Ensure no .env file is found
+    monkeypatch.setattr(raven.paths, "find_env_file", lambda env_path=None: None)
 
     # Set test values in environment
     original_env = os.environ.copy()
@@ -97,3 +98,36 @@ def mock_api_keys(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None
     # Restore original environment
     os.environ.clear()
     os.environ.update(original_env)
+
+
+@pytest.fixture
+def db_path_with_schema(tmp_path):
+    """Create test database with authors and paper_authors tables."""
+    db_path = tmp_path / "test.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS papers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                identifier TEXT NOT NULL,
+                title TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS authors (
+                id TEXT PRIMARY KEY,
+                orcid TEXT,
+                name TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS paper_authors (
+                paper_id INTEGER NOT NULL,
+                author_id TEXT NOT NULL,
+                author_order INTEGER NOT NULL,
+                is_corresponding INTEGER DEFAULT 0,
+                PRIMARY KEY (paper_id, author_id)
+            )
+        """)
+        conn.commit()
+    return db_path
