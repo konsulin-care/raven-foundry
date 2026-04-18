@@ -103,7 +103,7 @@ def _search_openalex(
     """Search OpenAlex and check ingestion status."""
     from raven.cli.search_display import display_json, display_text
 
-    openalex_results = _fetch_openalex_results(
+    openalex_results, total = _fetch_openalex_results(
         query, filter_str, page, per_page, use_semantic, sort
     )
 
@@ -115,8 +115,7 @@ def _search_openalex(
         identifier = r.get("identifier")
         r["ingested"] = identifier is not None and identifier.lower() in ingested_ids
 
-    # Apply pagination
-    total = len(openalex_results)
+    # Apply local pagination (slice relative to overscanned results)
     start = (page - 1) * per_page
     end = start + per_page
     paginated = openalex_results[start:end]
@@ -172,16 +171,22 @@ def _fetch_openalex_results(
     per_page: int,
     use_semantic: bool,
     sort: str,
-) -> list[dict[str, Any]]:
-    """Fetch OpenAlex results."""
+) -> tuple[list[dict[str, Any]], int]:
+    """Fetch OpenAlex results.
+
+    Returns:
+        Tuple of (normalized results, total count from API)
+    """
     oversfetch_per_page = max(per_page * 2, 100)
     result_data = search_works(
         query=query,
         filter_str=filter_str,
-        page=page,
+        page=1,
         per_page=oversfetch_per_page,
         sort=sort,
         use_semantic=use_semantic,
     )
     results = result_data.get("results", [])
-    return [normalize_openalex(r, format_search_result(r)) for r in results]
+    total = result_data.get("meta", {}).get("count", 0)
+    normalized = [normalize_openalex(r, format_search_result(r)) for r in results]
+    return (normalized, total)
