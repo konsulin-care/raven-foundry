@@ -63,6 +63,12 @@ Create `src/raven/<module>/__init__.py` with explicit type annotations:
 # 3. Contract reference to AGENTS.md rule
 ```
 
+### Input Validation Rules
+
+- **Never use `assert` for runtime checks** - Always use explicit exceptions or `typing.cast()`
+- Validate all CLI arguments and API inputs
+- See @.opencode/context/core/standards/code-quality.md for detailed examples and rationale
+
 ### File Size Limits
 
 - **Maximum**: 200 lines per file

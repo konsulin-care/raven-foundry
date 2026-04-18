@@ -8,7 +8,7 @@ import hashlib
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +73,9 @@ def add_paper_authors(
     if own_connection:
         conn = sqlite3.connect(db_path)
 
-    # Type narrowing: conn is now guaranteed non-None
-    assert conn is not None
-    connection = conn
+    connection = cast(sqlite3.Connection, conn)
 
     try:
-        # Check if normalized tables exist (backward compatibility)
         tables = connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
@@ -166,9 +163,7 @@ def delete_paper_authors(
     if own_connection:
         conn = sqlite3.connect(db_path)
 
-    # Type narrowing: conn is now guaranteed non-None
-    assert conn is not None
-    connection = conn
+    connection = cast(sqlite3.Connection, conn)
 
     try:
         connection.execute(
