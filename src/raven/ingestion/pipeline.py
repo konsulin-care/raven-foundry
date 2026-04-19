@@ -147,26 +147,25 @@ def ingest_paper(db_path: Path, identifier: str) -> dict[str, Any] | None:
     }
 
 
-def _prepare_papers_data(
-    results: list[dict[str, Any]],
-) -> list[tuple[dict[str, Any], str | None]]:
-    """Extract paper info and embedding text from search results."""
-    papers_data: list[tuple[dict[str, Any], str | None]] = []
-    for work in results:
-        paper_info, embedding_text = prepare_paper_info(work)
-        papers_data.append((paper_info, embedding_text))
-    return papers_data
-
-
 def _generate_embeddings_safe(
     papers_data: list[tuple[dict[str, Any], str | None]],
-) -> list[list[float]] | None:
-    """Generate embeddings for papers, returning None on failure."""
-    embedding_texts = [text for _, text in papers_data if text is not None]
-    if not embedding_texts:
+) -> list[list[float] | None] | None:
+    """Generate embeddings aligned to papers_data (None preserved at same positions)."""
+    valid_texts, valid_indices = [], []
+    for i, (_, text) in enumerate(papers_data):
+        if text is not None:
+            valid_texts.append(text)
+            valid_indices.append(i)
+
+    if not valid_texts:
         return None
+
     try:
-        return generate_embeddings_batch(embedding_texts)
+        generated = generate_embeddings_batch(valid_texts)
+        embeddings_aligned: list[list[float] | None] = [None] * len(papers_data)
+        for idx, emb in zip(valid_indices, generated):
+            embeddings_aligned[idx] = emb
+        return embeddings_aligned
     except Exception as e:
         logger.warning("Failed to generate embeddings: %s", e)
         return None
@@ -175,22 +174,20 @@ def _generate_embeddings_safe(
 def _store_and_build_results(
     db_path: Path,
     papers_data: list[tuple[dict[str, Any], str | None]],
-    embeddings: list[list[float]] | None,
+    embeddings: list[list[float] | None] | None,
 ) -> list[dict[str, Any]]:
     """Store each paper and build results list."""
     ingested = []
     for i, (paper_info, embedding_text) in enumerate(papers_data):
-        embedding = embeddings[i] if embeddings is not None else None
-        paper_id = _store_paper_with_embedding(
-            db_path, paper_info, embedding, embedding_text
-        )
+        emb = embeddings[i] if embeddings else None
+        paper_id = _store_paper_with_embedding(db_path, paper_info, emb, embedding_text)
         ingested.append(
             {
                 "paper_id": paper_id,
                 "identifier": paper_info["identifier"],
                 "title": paper_info["title"],
                 "type": paper_info["paper_type"],
-                "embedding": embedding,
+                "embedding": emb,
             }
         )
     return ingested
@@ -203,7 +200,8 @@ def ingest_search_results(
     results = search_results.get("results", [])
     if not results:
         return []
-
-    papers_data = _prepare_papers_data(results)
+    papers_data: list[tuple[dict[str, Any], str | None]] = [
+        prepare_paper_info(w) for w in results
+    ]
     embeddings = _generate_embeddings_safe(papers_data)
     return _store_and_build_results(db_path, papers_data, embeddings)

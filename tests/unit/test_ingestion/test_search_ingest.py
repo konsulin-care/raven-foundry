@@ -4,6 +4,7 @@ Run with: pytest tests/unit/test_ingestion/test_search_ingest.py -v
 """
 
 from raven.ingestion import ingest_search_results
+from raven.ingestion.pipeline import _generate_embeddings_safe
 from raven.storage import init_database
 
 
@@ -153,3 +154,62 @@ class TestIngestSearchResults:
         assert results[0]["identifier"] == "doi:10.1234/duplicate"
         assert results[0]["paper_id"] == 1
         mock_add_embedding.assert_not_called()
+
+
+class TestGenerateEmbeddingsSafe:
+    """Tests for _generate_embeddings_safe function."""
+
+    def test_embeddings_aligned_with_none_texts(self, mocker):
+        """_generate_embeddings_safe preserves index alignment with None texts."""
+        mock_generate_batch = mocker.patch(
+            "raven.ingestion.pipeline.generate_embeddings_batch"
+        )
+        mock_generate_batch.return_value = [
+            [0.1] * 384,
+            [0.2] * 384,
+        ]
+
+        papers_data = [
+            ({"id": 1}, "text1"),
+            ({"id": 2}, None),
+            ({"id": 3}, "text3"),
+        ]
+
+        result = _generate_embeddings_safe(papers_data)
+
+        assert result is not None
+        assert len(result) == 3
+        assert result[0] == [0.1] * 384
+        assert result[1] is None
+        assert result[2] == [0.2] * 384
+
+    def test_all_none_texts_returns_none(self, mocker):
+        """_generate_embeddings_safe returns None when all embedding texts are None."""
+        mock_generate_batch = mocker.patch(
+            "raven.ingestion.pipeline.generate_embeddings_batch"
+        )
+
+        papers_data = [
+            ({"id": 1}, None),
+            ({"id": 2}, None),
+        ]
+
+        result = _generate_embeddings_safe(papers_data)
+
+        assert result is None
+        mock_generate_batch.assert_not_called()
+
+    def test_embedding_failure_returns_none(self, mocker):
+        """_generate_embeddings_safe returns None on generation failure."""
+        mock_generate_batch = mocker.patch(
+            "raven.ingestion.pipeline.generate_embeddings_batch"
+        )
+        mock_generate_batch.side_effect = RuntimeError("Model error")
+
+        papers_data = [
+            ({"id": 1}, "text1"),
+        ]
+
+        result = _generate_embeddings_safe(papers_data)
+
+        assert result is None
