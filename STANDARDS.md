@@ -43,7 +43,7 @@ See @.opencode/context/core/standards/lazy-loading.md
 
 ### File Size
 
-Maximum 200 lines per file. Easier to understand, test, and debug.
+Maximum 300 lines per file. 200 lines triggers a warning to consider refactoring.
 See @.opencode/context/core/standards/complexity.md
 
 ### Cognitive Complexity

@@ -7,7 +7,17 @@
 
 ## File Size Limits
 
-**Maximum**: 200 lines per file.
+**Maximum**: 300 lines per file.
+
+**Warning threshold**: 200 lines - consider refactoring.
+
+### Tiered Approach
+
+| Lines | Action |
+|-------|-------|
+| <200 | No action needed |
+| 200-300 | Warning - evaluate if refactoring is beneficial |
+| >300 | Must refactor before merging |
 
 Files under 200 lines are easier to understand, test, debug, and review.
 
@@ -19,7 +29,8 @@ wc -l src/raven/**/*.py
 
 ### If Exceeded
 
-Trigger CodeReview agent, then delegate to plan agent using Context7 for refactoring.
+- 200-300 lines: Trigger CodeReview agent for evaluation
+- >300 lines: Delegate to plan agent using Context7 for refactoring
 
 ### Exception Criteria
 

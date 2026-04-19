@@ -17,8 +17,8 @@ Rules:
 - Tests should pass in pre-commit hooks (.pre-commit-config.yaml)
 - OpenAlex API is the default search platform to use
 - Use Context7 when implementing search using OpenAlex API
-- Enforce 200-line max per file, evaluated after each edit as per @STANDARDS.md
-- Enforce 15 max cognitive complexity per function, per @STANDARDS.md
+- Enforce 300-line max per file (200-line warning threshold)
+- Enforce 15 max cognitive complexity per function
 
 Testing Requirements:
 - Every function with a return value should have a corresponding unit test, unless it has been indirectly tested
