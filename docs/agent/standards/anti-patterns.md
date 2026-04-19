@@ -36,10 +36,12 @@ with sqlite3.connect(db) as conn:
     # ... use conn ...
 # Connection still open!
 
-# CORRECT - Explicit close after with block
-with sqlite3.connect(db) as conn:
+# CORRECT - Try/finally guarantees closure even on exceptions
+conn = sqlite3.connect(db)
+try:
     # ... use conn ...
-conn.close()  # See: sqlite3.connect, conn.close()
+finally:
+    conn.close()  # See: sqlite3.connect, conn.close(), try/finally
 
 # CORRECT - Using contextlib.closing for guaranteed closure
 import contextlib
@@ -116,7 +118,9 @@ def search_works(sort: str = DEFAULT_SORT_ORDER):
     ...
 def search_works_keyword(sort: str = DEFAULT_SORT_ORDER):
     ...
-def search_works_semantic(params: dict = {"sort": DEFAULT_SORT_ORDER}):
+def search_works_semantic(params: Optional[dict] = None):
+    if params is None:
+        params = {"sort": DEFAULT_SORT_ORDER}
     ...
 ```
 
