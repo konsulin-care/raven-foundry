@@ -33,7 +33,7 @@ audience: Developers, AI agents
 
 ## Code Standards
 - Python 3.11+ with type hints
-- SQLite context managers (`with sqlite3.connect() as conn`)
+- SQLite: use `contextlib.closing(sqlite3.connect(...))` to ensure connection is closed
 - DOI case-insensitive: `COLLATE NOCASE` + `LOWER()` in queries
 - No mutable default args: use `None` and init inside function
 - All functions with return values require unit tests
