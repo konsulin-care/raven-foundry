@@ -260,12 +260,14 @@ class TestCLICommands:
                 return self
 
             def __exit__(self, *args):
-                pass
+                # Intentionally a no-op; always returns falsy to suppress exception handling
+                return False
 
             def execute(self, sql, *args, **kwargs):
+                # Unconditionally raises OperationalError by design to force the failure path
                 raise sqlite3.OperationalError(self.error_msg)
 
-        # Create mock connection that raises "database is locked" error
+        # Creates mock that raises "database is locked" to prevent PRAGMA journal_mode=WAL from succeeding
         def create_mock_conn(path, **kwargs):
             return MockConn("database is locked")
 
