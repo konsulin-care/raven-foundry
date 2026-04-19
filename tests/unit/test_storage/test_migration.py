@@ -125,13 +125,13 @@ class TestIsUnsupportedDropColumnError:
     """Tests for _is_unsupported_drop_column_error helper."""
 
     def test_detects_drop_column_unsupported_error(self):
-        """Correctly identifies 'no such command: DROP COLUMN' error."""
-        error = sqlite3.OperationalError("no such command: DROP COLUMN")
+        """Correctly identifies unsupported DROP COLUMN error."""
+        error = sqlite3.OperationalError('near "DROP": syntax error')
         assert _is_unsupported_drop_column_error(error) is True
 
     def test_detects_drop_column_unsupported_error_case_insensitive(self):
         """Error detection is case insensitive."""
-        error = sqlite3.OperationalError("NO SUCH COMMAND: DROP COLUMN")
+        error = sqlite3.OperationalError('NEAR "DROP": SYNTAX ERROR')
         assert _is_unsupported_drop_column_error(error) is True
 
     def test_does_not_match_other_operational_errors(self):

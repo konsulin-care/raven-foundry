@@ -16,7 +16,8 @@ def _is_unsupported_drop_column_error(e: sqlite3.OperationalError) -> bool:
     """Check if OperationalError is due to SQLite lacking DROP COLUMN support.
 
     SQLite versions < 3.35.0 do not support ALTER TABLE DROP COLUMN.
-    The error message is: "no such command: DROP COLUMN"
+    Real error messages include: 'near "DROP": syntax error' or similar
+    patterns containing both 'drop' and 'syntax error'.
 
     Args:
         e: The OperationalError to check.
@@ -24,7 +25,8 @@ def _is_unsupported_drop_column_error(e: sqlite3.OperationalError) -> bool:
     Returns:
         True if this is the expected unsupported operation error.
     """
-    return "drop column" in str(e).lower()
+    msg = str(e).lower()
+    return "drop column" in msg or ("drop" in msg and "syntax error" in msg)
 
 
 def safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> None:
