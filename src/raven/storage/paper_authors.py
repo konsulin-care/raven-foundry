@@ -4,9 +4,9 @@ Handles normalized author schema with authors + paper_authors tables.
 """
 
 import contextlib
-import hashlib
 import logging
 import sqlite3
+import uuid
 from pathlib import Path
 from typing import Any, cast
 
@@ -26,7 +26,7 @@ def _get_author_id_from_orcid(orcid: str | None) -> str:
         # ORCID is already linked to an OpenAlex author ID
         # We store the orcid and will resolve to author ID via lookup
         return orcid.replace("https://orcid.org/", "").replace("0000-", "A0000-")
-    return "A" + hashlib.sha256().hexdigest()[:10].upper()
+    return "A" + str(uuid.uuid4())
 
 
 def add_author(
@@ -85,17 +85,35 @@ def add_paper_authors(
             return  # Skip if old database schema
 
         for author in authors_data:
-            # Ensure author exists in authors table
+            author_id = author.get("id")
+            author_name = author.get("name")
+            author_orcid = author.get("orcid")
+
+            # Detect collisions: if author_id exists with different name, fail loudly
+            existing = connection.execute(
+                "SELECT name, orcid FROM authors WHERE id = ?", (author_id,)
+            ).fetchone()
+            if existing:
+                if existing[0] != author_name:
+                    logger.error(
+                        "Author ID collision: %s maps to '%s' but trying to insert '%s'. "
+                        "Manual intervention required.",
+                        author_id,
+                        existing[0],
+                        author_name,
+                    )
+                    raise RuntimeError(
+                        f"Author ID collision: {author_id} maps to '{existing[0]}' "
+                        f"but trying to insert '{author_name}'. Manual intervention required."
+                    )
+
+            # Ensure author exists in authors table (use REPLACE to update orcid if changed)
             connection.execute(
                 """
-                INSERT OR IGNORE INTO authors (id, orcid, name)
+                INSERT OR REPLACE INTO authors (id, orcid, name)
                 VALUES (?, ?, ?)
                 """,
-                (
-                    author.get("id"),
-                    author.get("orcid"),
-                    author.get("name"),
-                ),
+                (author_id, author_orcid, author_name),
             )
 
             # Add junction entry
@@ -107,7 +125,7 @@ def add_paper_authors(
                 """,
                 (
                     paper_id,
-                    author.get("id"),
+                    author_id,
                     author.get("order", 0),
                     author.get("is_corresponding", 0),
                 ),
@@ -194,7 +212,9 @@ def convert_authors_to_data(
     author_names = [n.strip() for n in authors.split(",") if n.strip()]
     authors_data = []
     for idx, name in enumerate(author_names):
-        author_id = "A" + hashlib.sha256(name.encode()).hexdigest()[:10].upper()
+        # UUID5 provides 128-bit collision resistance vs truncated SHA256 (~40 bits)
+        normalized_name = name.lower().strip()
+        author_id = "A" + str(uuid.uuid5(uuid.NAMESPACE_DNS, normalized_name))
         authors_data.append(
             {
                 "id": author_id,

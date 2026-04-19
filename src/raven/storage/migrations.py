@@ -3,9 +3,9 @@
 Handles schema migrations and backward compatibility.
 """
 
-import hashlib
 import logging
 import sqlite3
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,22 @@ def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
             author_names = [n.strip() for n in authors_text.split(",") if n.strip()]
 
             for order, name in enumerate(author_names):
-                author_id = "A" + hashlib.sha256(name.encode()).hexdigest()[:10].upper()
+                # UUID5 provides 128-bit collision resistance; truncating SHA256
+                # to 10 chars (~40 bits) risks silent merges under INSERT OR IGNORE.
+                # Using namespaced UUID5 with normalized name for deterministic ID,
+                # with collision check to catch any hash namespace collisions.
+                normalized_name = name.lower().strip()
+                author_id = "A" + str(uuid.uuid5(uuid.NAMESPACE_DNS, normalized_name))
+
+                # Detect collisions: if author_id exists with different name, fail loudly
+                existing = conn.execute(
+                    "SELECT name FROM authors WHERE id = ?", (author_id,)
+                ).fetchone()
+                if existing and existing[0] != name:
+                    raise RuntimeError(
+                        f"Author ID collision: {author_id} maps to '{existing[0]}' "
+                        f"but trying to insert '{name}'. Manual intervention required."
+                    )
 
                 # Insert into authors table
                 conn.execute(

@@ -22,21 +22,21 @@ class TestGetAuthorIdFromOrcid:
         result = _get_author_id_from_orcid("0000-0002-1825-0097")
         assert result == "A0000-0002-1825-0097"
 
-    def test_with_none_generates_sha256_based_id(self):
-        """None input generates SHA-256 based author ID."""
+    def test_with_none_generates_uuid4_based_id(self):
+        """None input generates UUID4 based author ID."""
         result = _get_author_id_from_orcid(None)
         assert result.startswith("A")
-        assert len(result) == 11  # 'A' + 10 hex chars
+        assert len(result) == 37  # 'A' + 36 char UUID
 
-    def test_with_none_is_deterministic_per_call(self):
-        """None input generates a valid SHA-256 based ID (not tested for exact value)."""
+    def test_with_none_is_nondeterministic(self):
+        """None input generates a random UUID4 (different each call)."""
         result1 = _get_author_id_from_orcid(None)
         result2 = _get_author_id_from_orcid(None)
-        assert result1 == result2
+        assert result1 != result2
         assert result1.startswith("A")
-        assert len(result1) == 11
+        assert len(result1) == 37
         assert result2.startswith("A")
-        assert len(result2) == 11
+        assert len(result2) == 37
 
 
 class TestConvertAuthorsToData:
@@ -88,14 +88,14 @@ class TestConvertAuthorsToData:
         assert result[0]["name"] == "John Smith"
         assert result[1]["name"] == "Jane Doe"
 
-    def test_ids_are_sha256_based(self):
-        """Verify IDs are SHA-256 based (10 hex chars after A)."""
+    def test_ids_are_uuid5_based(self):
+        """Verify IDs are UUID5 based (36 char UUID after A)."""
         result = convert_authors_to_data("John Smith")
         author_id = result[0]["id"]
         assert author_id.startswith("A")
-        hex_part = author_id[1:]
-        assert len(hex_part) == 10
-        assert all(c in "0123456789ABCDEF" for c in hex_part)
+        uuid_part = author_id[1:]
+        assert len(uuid_part) == 36
+        assert uuid_part.count("-") == 4  # UUID5 format with 4 hyphens
 
     def test_idempotency(self):
         """Same author name produces same ID consistently."""
