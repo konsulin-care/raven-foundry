@@ -13,6 +13,7 @@ purpose: AI agent workflows for Raven Foundry
 |------|-------------|----------|
 | code-review.md | Code review checklist | high |
 | task-delegation.md | How to delegate tasks | high |
+| user-documentation.md | How to create user documentation | high |
 
 ## When to Use
 
@@ -27,6 +28,11 @@ purpose: AI agent workflows for Raven Foundry
 - When specialized knowledge needed
 - When multi-component work
 - When multi-step dependencies exist
+
+### User Documentation (`user-documentation.md`)
+- When creating new markdown documentation
+- When updating existing docs in docs/agent/
+- Enforce YAML front matter and 200-line limit
 
 ## Delegation Triggers
 
