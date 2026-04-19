@@ -1,13 +1,16 @@
-<!-- Context: documentation | Priority: high | Version: 1.0 | Updated: 2026-04-14 -->
-
-# Documentation Standards
-
-**Purpose**: Documentation style and format for Raven Foundry codebase
-**Last Updated**: 2026-04-14
+---
+context: documentation
+priority: high
+version: 1.0
+updated: 2026-04-14
+title: Documentation Standards
+purpose: Documentation style and format for Raven Foundry codebase
+---
 
 ## Docstring Format
 
 ### Module Docstrings
+
 ```python
 """Module name - One-line description.
 
@@ -26,6 +29,7 @@ Rules:
 ```
 
 ### Function Docstrings
+
 ```python
 def function_name(arg1: str, arg2: int | None = None) -> dict[str, Any]:
     """Short description of what the function does.
@@ -45,6 +49,7 @@ def function_name(arg1: str, arg2: int | None = None) -> dict[str, Any]:
 ## Type Hints
 
 **Required for all functions**:
+
 ```python
 # Good
 def search_papers(db_path: Path, query: str) -> list[dict[str, Any]]:
@@ -58,6 +63,7 @@ def search_papers(db_path, query):
 ## CLI Command Documentation
 
 Use Click's docstring format:
+
 ```python
 @cli.command()
 @click.argument("query")
@@ -72,5 +78,6 @@ def search(ctx: click.Context, query: str, filter: str | None) -> None:
 ```
 
 ## Related Files
+
 - Module AGENTS.md: `src/raven/*/AGENTS.md`
 - technical-domain.md: Tech stack patterns

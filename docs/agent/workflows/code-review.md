@@ -1,9 +1,11 @@
-<!-- Context: code-review | Priority: high | Version: 1.0 | Updated: 2026-04-14 -->
-
-# Code Review Workflow
-
-**Purpose**: Code review process and checklist for Raven Foundry
-**Last Updated**: 2026-04-14
+---
+context: code-review
+priority: high
+version: 1.0
+updated: 2026-04-14
+title: Code Review Workflow
+purpose: Code review process and checklist for Raven Foundry
+---
 
 ## Review Checklist
 
@@ -71,5 +73,6 @@ pytest tests/ -v
 ```
 
 ## Related Files
+
 - coverage.md: Test requirements
 - Module AGENTS.md: Module-specific standards

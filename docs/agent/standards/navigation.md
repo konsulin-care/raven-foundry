@@ -1,9 +1,11 @@
-<!-- Context: standards/navigation | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
-
-# Standards Navigation
-
-**Purpose**: Coding practice standards for Raven Foundry
-**Updated**: 2026-04-19
+---
+context: navigation
+priority: critical
+version: 1.0
+updated: 2026-04-19
+title: Standards Navigation
+purpose: Coding practice standards for Raven Foundry
+---
 
 ## Files
 
@@ -18,3 +20,23 @@
 | complexity.md | File size (200 max), cognitive complexity (15 max) | critical |
 | coverage.md | Test coverage requirements | high |
 | documentation.md | Docstring standards | high |
+
+## Quick Reference
+
+| Task | Standard File |
+|------|--------------|
+| Type hints, naming | code-style.md |
+| SQLite, SQL, defaults | code-patterns.md |
+| Input validation | validation.md |
+| Import organization | imports.md |
+| Performance | lazy-loading.md |
+| What to avoid | anti-patterns.md |
+| Complexity limits | complexity.md |
+| Testing | coverage.md |
+| Docstrings | documentation.md |
+
+## Related Files
+
+- `@AGENTS.md` - Root entry point
+- `@docs/agent/navigation.md` - Agent context navigation
+- `@docs/agent/workflows/` - Agent workflows

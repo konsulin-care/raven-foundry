@@ -1,9 +1,11 @@
-<!-- Context: code-patterns | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
-
-# Code Patterns
-
-**Purpose**: Required code patterns for Raven Foundry
-**Updated**: 2026-04-19
+---
+context: code-patterns
+priority: critical
+version: 1.0
+updated: 2026-04-19
+title: Code Patterns
+purpose: Required code patterns for Raven Foundry
+---
 
 ## SQLite Context Managers (REQUIRED)
 
@@ -63,5 +65,6 @@ doi TEXT UNIQUE NOT NULL COLLATE NOCASE
 ```
 
 ## Related Files
+
 - `code-style.md`: Type hints and naming
 - `validation.md`: Input validation rules

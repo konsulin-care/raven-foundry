@@ -1,9 +1,11 @@
-<!-- Context: code-style | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
-
-# Code Style Standards
-
-**Purpose**: Type hints and naming conventions for Raven Foundry
-**Updated**: 2026-04-19
+---
+context: code-style
+priority: critical
+version: 1.0
+updated: 2026-04-19
+title: Code Style Standards
+purpose: Type hints and naming conventions for Raven Foundry
+---
 
 ## Python Version
 
@@ -76,5 +78,6 @@ def get_items() -> list:  # Shadows list type!
 ```
 
 ## Related Files
+
 - `code-patterns.md`: Code patterns and anti-patterns
 - `validation.md`: Input validation rules

@@ -1,13 +1,13 @@
-<!-- Context: coverage | Priority: high | Version: 1.0 | Updated: 2026-04-14 -->
-
-# Test Coverage Standards
-
-**Purpose**: Testing requirements and patterns for Raven Foundry
-**Last Updated**: 2026-04-14
-
-## Quick Reference
-**Update Triggers**: New modules | Testing framework changes | Coverage gaps
-**Audience**: Developers, AI agents
+---
+context: coverage
+priority: high
+version: 1.0
+updated: 2026-04-14
+title: Test Coverage Standards
+purpose: Testing requirements and patterns for Raven Foundry
+update_triggers: New modules | Testing framework changes | Coverage gaps
+audience: Developers, AI agents
+---
 
 ## Testing Framework
 
@@ -60,6 +60,7 @@ def test_function_name_scenario():
 ## Test Patterns
 
 ### Database Tests
+
 ```python
 def test_search_case_insensitive(tmp_path):
     db_path = tmp_path / "test.db"
@@ -73,6 +74,7 @@ def test_search_case_insensitive(tmp_path):
 ```
 
 ### CLI Tests (Click CliRunner)
+
 ```python
 def test_search_command_with_results(tmp_path):
     runner = CliRunner()
@@ -89,6 +91,7 @@ def test_search_command_with_results(tmp_path):
 ```
 
 ### Mocking Environment Variables
+
 ```python
 # Prefer monkeypatch over patch for env vars
 def test_config_loads_api_key(monkeypatch):
@@ -117,5 +120,6 @@ def test_config_loads_api_key(monkeypatch):
 4. **Testing implementation** - Test behavior, not internals
 
 ## Related Files
+
 - Module AGENTS.md: `src/raven/*/AGENTS.md` (module-specific test rules)
 - documentation.md: Documentation standards

@@ -1,15 +1,16 @@
-<!-- Context: technical-domain | Priority: critical | Version: 1.2 | Updated: 2026-04-13 -->
-
-# Technical Domain
-
-**Purpose**: Tech stack, architecture, development patterns for Raven Foundry
-**Last Updated**: 2026-04-13
-
-## Quick Reference
-**Update Triggers**: Tech stack changes | New modules | Architecture decisions
-**Audience**: Developers, AI agents
+---
+context: technical-domain
+priority: critical
+version: 1.2
+updated: 2026-04-13
+title: Technical Domain
+purpose: Tech stack, architecture, development patterns for Raven Foundry
+update_triggers: Tech stack changes | New modules | Architecture decisions
+audience: Developers, AI agents
+---
 
 ## Primary Stack
+
 | Layer | Technology | Version | Rationale |
 |-------|-----------|---------|-----------|
 | Language | Python | 3.11+ | Type hints, modern async support |
@@ -20,6 +21,7 @@
 | Testing | pytest | - | Unit tests with mocks |
 
 ## Naming Conventions
+
 | Type | Convention | Example |
 |------|-----------|---------|
 | Files | snake_case | `config.py`, `ingestion/__init__.py` |
@@ -46,6 +48,7 @@
 - Handle network errors gracefully with retries
 
 ## Codebase References
+
 **Implementation**:
 - `src/raven/main.py` - CLI entry point with Click commands
 - `src/raven/config.py` - Environment config loading from .env
@@ -55,5 +58,6 @@
 - `src/raven/embeddings/__init__.py` - Placeholder for vector embeddings
 
 ## Related Files
+
 - Module AGENTS.md: `src/raven/*/AGENTS.md` for module-specific rules
 - navigation.md: Agent context navigation

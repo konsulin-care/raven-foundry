@@ -1,9 +1,11 @@
-<!-- Context: validation | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
-
-# Input Validation Standards
-
-**Purpose**: Input validation rules for Raven Foundry
-**Updated**: 2026-04-19
+---
+context: validation
+priority: critical
+version: 1.0
+updated: 2026-04-19
+title: Input Validation Standards
+purpose: Input validation rules for Raven Foundry
+---
 
 ## Never Use Assert for Runtime Checks
 
@@ -67,5 +69,6 @@ assert conn is not None
 | Not implemented | `NotImplementedError` | Method not yet supported |
 
 ## Related Files
+
 - `code-patterns.md`: Code patterns
 - `code-style.md`: Type hints

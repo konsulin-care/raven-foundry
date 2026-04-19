@@ -1,9 +1,11 @@
-<!-- Context: task-delegation | Priority: high | Version: 1.0 | Updated: 2026-04-14 -->
-
-# Task Delegation Workflow
-
-**Purpose**: How to delegate tasks effectively in Raven Foundry
-**Last Updated**: 2026-04-14
+---
+context: task-delegation
+priority: high
+version: 1.0
+updated: 2026-04-14
+title: Task Delegation Workflow
+purpose: How to delegate tasks effectively in Raven Foundry
+---
 
 ## When to Delegate
 
@@ -19,6 +21,7 @@
 ## Context Passing
 
 ### Essential Context Files
+
 Always pass relevant context to subagents:
 
 | Task Type | Context to Load |
@@ -32,6 +35,7 @@ Always pass relevant context to subagents:
 | Delegation | This file + relevant standards |
 
 ### Context Bundle (for complex delegation)
+
 ```python
 # Create context bundle for subagent
 context_bundle = """
@@ -64,6 +68,7 @@ Before executing delegated tasks:
 ## Error Handling
 
 ### Report First (Never Auto-Fix)
+
 When delegated task fails:
 1. Report the error
 2. Propose fix
@@ -71,11 +76,13 @@ When delegated task fails:
 4. Apply fix after approval
 
 ### Never Skip Context
+
 - Always load required context before delegation
 - Pass relevant context to subagent
 - Verify subagent loaded context
 
 ## Related Files
+
 - code-style.md: Code standards
 - coverage.md: Test standards
 - code-review.md: Review workflow
