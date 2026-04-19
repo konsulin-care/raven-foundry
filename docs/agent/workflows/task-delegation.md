@@ -9,11 +9,11 @@
 
 | Condition | Action |
 |-----------|--------|
-| 4+ files in task | Delegate to CoderAgent |
+| 4+ files in task | Delegate to coder agent |
 | Specialized knowledge needed | Delegate to specialist |
-| Multi-component review | Delegate to CodeReviewer |
+| Multi-component review | Delegate to review agent |
 | Multi-step dependencies | Delegate to TaskManager |
-| Fresh perspective needed | Delegate to CodeReviewer |
+| Fresh perspective needed | Delegate to review agent |
 | Edge case testing | Delegate to TestEngineer |
 
 ## Context Passing
@@ -49,15 +49,6 @@ Files to modify:
 - src/raven/storage/__init__.py
 """
 ```
-
-## Subagent Types
-
-| Agent | Use For |
-|-------|---------|
-| CoderAgent | General code implementation |
-| TestEngineer | Writing tests |
-| CodeReviewer | Code review, security |
-| TaskManager | Complex feature breakdown |
 
 ## Approval Workflow
 
