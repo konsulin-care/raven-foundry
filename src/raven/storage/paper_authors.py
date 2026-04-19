@@ -77,19 +77,18 @@ def add_paper_authors(
             existing = connection.execute(
                 "SELECT name, orcid FROM authors WHERE id = ?", (author_id,)
             ).fetchone()
-            if existing:
-                if existing[0] != author_name:
-                    logger.error(
-                        "Author ID collision: %s maps to '%s' but trying to insert '%s'. "
-                        "Manual intervention required.",
-                        author_id,
-                        existing[0],
-                        author_name,
-                    )
-                    raise RuntimeError(
-                        f"Author ID collision: {author_id} maps to '{existing[0]}' "
-                        f"but trying to insert '{author_name}'. Manual intervention required."
-                    )
+            if existing and existing[0] != author_name:
+                logger.error(
+                    "Author ID collision: %s maps to '%s' but trying to insert '%s'. "
+                    "Manual intervention required.",
+                    author_id,
+                    existing[0],
+                    author_name,
+                )
+                raise RuntimeError(
+                    f"Author ID collision: {author_id} maps to '{existing[0]}' "
+                    f"but trying to insert '{author_name}'. Manual intervention required."
+                )
 
             # Ensure author exists in authors table (use REPLACE to update orcid if changed)
             connection.execute(
