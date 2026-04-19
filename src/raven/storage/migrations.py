@@ -62,6 +62,67 @@ def safe_add_column(conn: sqlite3.Connection, col_name: str, col_type: str) -> N
     conn.execute(f"ALTER TABLE papers ADD COLUMN [{col_name}] {col_type}")
 
 
+def _drop_authors_column_safe(
+    conn: sqlite3.Connection, commit_on_success: bool = False
+) -> None:
+    """Safely drop the legacy authors column with error handling.
+
+    Handles SQLite versions < 3.35.0 that don't support DROP COLUMN.
+
+    Args:
+        conn: SQLite connection.
+        commit_on_success: Whether to commit after successful drop.
+    """
+    try:
+        conn.execute(_DROP_AUTHORS_COLUMN_SQL)
+    except sqlite3.OperationalError as e:
+        if _is_unsupported_drop_column_error(e):
+            if commit_on_success:
+                conn.commit()
+            return
+        logger.warning("DROP COLUMN failed: %s", e)
+        raise
+    if commit_on_success:
+        conn.commit()
+
+
+def _insert_author_for_paper(
+    conn: sqlite3.Connection, paper_id: int, author_name: str, order: int
+) -> None:
+    """Insert a single author's normalized entry with collision detection.
+
+    Generates deterministic UUID5 from normalized name, detects collisions,
+    inserts into authors and paper_authors junction tables.
+
+    Args:
+        conn: SQLite connection.
+        paper_id: The paper ID to link the author to.
+        author_name: The author's display name.
+        author_order: The order index for this author on the paper.
+    """
+    normalized_name = author_name.lower().strip()
+    author_id = "A" + str(uuid.uuid5(uuid.NAMESPACE_DNS, normalized_name))
+
+    existing = conn.execute(
+        "SELECT name FROM authors WHERE id = ?", (author_id,)
+    ).fetchone()
+    if existing and existing[0] != author_name:
+        raise RuntimeError(
+            f"Author ID collision: {author_id} maps to '{existing[0]}' "
+            f"but trying to insert '{author_name}'. Manual intervention required."
+        )
+
+    conn.execute(
+        "INSERT OR IGNORE INTO authors (id, orcid, name) VALUES (?, NULL, ?)",
+        (author_id, author_name),
+    )
+    conn.execute(
+        "INSERT INTO paper_authors (paper_id, author_id, author_order, is_corresponding) "
+        "VALUES (?, ?, ?, 0)",
+        (paper_id, author_id, order),
+    )
+
+
 def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
     """Migrate legacy TEXT authors column to normalized schema.
 
@@ -74,45 +135,26 @@ def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
     Args:
         conn: SQLite connection.
     """
-    # Check if papers table has the legacy authors column with data
     columns_result = conn.execute("PRAGMA table_info('papers')").fetchall()
     paper_columns = {row[1] for row in columns_result}
 
     if "authors" not in paper_columns:
-        return  # No legacy column to migrate
+        return
 
-    # Check if there's any data in the authors column
     has_data = conn.execute(
         "SELECT COUNT(*) FROM papers WHERE authors IS NOT NULL AND authors != ''"
     ).fetchone()[0]
 
     if has_data == 0:
-        # No data, just drop the column
-        try:
-            conn.execute(_DROP_AUTHORS_COLUMN_SQL)
-        except sqlite3.OperationalError as e:
-            if _is_unsupported_drop_column_error(e):
-                return
-            logger.warning("DROP COLUMN failed (no data case): %s", e)
-            raise
+        _drop_authors_column_safe(conn)
         return
 
-    # Migration flag: track if we've already migrated
     migration_done = conn.execute("SELECT COUNT(*) FROM paper_authors").fetchone()[0]
 
     if migration_done > 0:
-        # Already migrated, drop legacy column
-        try:
-            conn.execute(_DROP_AUTHORS_COLUMN_SQL)
-        except sqlite3.OperationalError as e:
-            if _is_unsupported_drop_column_error(e):
-                return
-            logger.warning("DROP COLUMN failed (already migrated case): %s", e)
-            raise
+        _drop_authors_column_safe(conn)
         return
 
-    # Perform migration: parse comma-separated authors
-    # Wrap in explicit transaction to ensure atomicity
     conn.execute("BEGIN")
 
     try:
@@ -122,57 +164,12 @@ def _migrate_authors_to_normalized(conn: sqlite3.Connection) -> None:
             """).fetchall()
 
         for paper_id, authors_text in papers_with_authors:
-            # Parse comma-separated author names
             author_names = [n.strip() for n in authors_text.split(",") if n.strip()]
 
             for order, name in enumerate(author_names):
-                # UUID5 provides 128-bit collision resistance; truncating SHA256
-                # to 10 chars (~40 bits) risks silent merges under INSERT OR IGNORE.
-                # Using namespaced UUID5 with normalized name for deterministic ID,
-                # with collision check to catch any hash namespace collisions.
-                normalized_name = name.lower().strip()
-                author_id = "A" + str(uuid.uuid5(uuid.NAMESPACE_DNS, normalized_name))
+                _insert_author_for_paper(conn, paper_id, name, order)
 
-                # Detect collisions: if author_id exists with different name, fail loudly
-                existing = conn.execute(
-                    "SELECT name FROM authors WHERE id = ?", (author_id,)
-                ).fetchone()
-                if existing and existing[0] != name:
-                    raise RuntimeError(
-                        f"Author ID collision: {author_id} maps to '{existing[0]}' "
-                        f"but trying to insert '{name}'. Manual intervention required."
-                    )
-
-                # Insert into authors table
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO authors (id, orcid, name)
-                    VALUES (?, NULL, ?)
-                    """,
-                    (author_id, name),
-                )
-
-                # Insert into junction table
-                conn.execute(
-                    """
-                    INSERT INTO paper_authors (paper_id, author_id, author_order, is_corresponding)
-                    VALUES (?, ?, ?, 0)
-                    """,
-                    (paper_id, author_id, order),
-                )
-
-        # Drop legacy authors column
-        try:
-            conn.execute(_DROP_AUTHORS_COLUMN_SQL)
-        except sqlite3.OperationalError as e:
-            if _is_unsupported_drop_column_error(e):
-                conn.commit()
-                return
-            logger.warning("DROP COLUMN failed (post-migration case): %s", e)
-            conn.rollback()
-            raise
-
-        conn.commit()
+        _drop_authors_column_safe(conn, commit_on_success=True)
     except Exception:
         conn.rollback()
         raise
