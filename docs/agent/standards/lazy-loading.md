@@ -1,9 +1,11 @@
-<!-- Context: core/standards/lazy-loading | Priority: high | Version: 1.0 | Updated: 2026-04-19 -->
-
-# Lazy Loading Standards
-
-**Purpose**: Two-level lazy loading mechanism for Raven Foundry
-**Updated**: 2026-04-19
+---
+context: lazy-loading
+priority: high
+version: 1.0
+updated: 2026-04-19
+title: Lazy Loading Standards
+purpose: Two-level lazy loading mechanism for Raven Foundry
+---
 
 ## Level 1: CLI-level Lazy Loading (Primary)
 
@@ -52,5 +54,6 @@ def __getattr__(name: str) -> object:
 | Function called on every invocation | Use top-level import |
 
 ## Related Files
+
 - `imports.md`: Import ordering
 - `anti-patterns.md`: Anti-patterns to avoid

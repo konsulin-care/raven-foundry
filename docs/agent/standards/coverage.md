@@ -1,13 +1,13 @@
-<!-- Context: core/standards/coverage | Priority: high | Version: 1.0 | Updated: 2026-04-14 -->
-
-# Test Coverage Standards
-
-**Purpose**: Testing requirements and patterns for Raven Foundry
-**Last Updated**: 2026-04-14
-
-## Quick Reference
-**Update Triggers**: New modules | Testing framework changes | Coverage gaps
-**Audience**: Developers, AI agents
+---
+context: coverage
+priority: high
+version: 1.0
+updated: 2026-04-14
+title: Test Coverage Standards
+purpose: Testing requirements and patterns for Raven Foundry
+update_triggers: New modules | Testing framework changes | Coverage gaps
+audience: Developers, AI agents
+---
 
 ## Testing Framework
 
@@ -42,7 +42,7 @@ def test_search_papers():
 ### Test File Naming
 
 | Module | Test File |
-|--------|-----------|
+|--------|---------|
 | `raven.config` | `tests/test_unit.py` (mixed) |
 | `raven.storage` | `tests/test_unit.py`, `tests/test_storage.py` |
 | `raven.ingestion` | `tests/test_unit.py`, `tests/test_ingestion.py` |
@@ -60,6 +60,7 @@ def test_function_name_scenario():
 ## Test Patterns
 
 ### Database Tests
+
 ```python
 def test_search_case_insensitive(tmp_path):
     db_path = tmp_path / "test.db"
@@ -73,6 +74,7 @@ def test_search_case_insensitive(tmp_path):
 ```
 
 ### CLI Tests (Click CliRunner)
+
 ```python
 def test_search_command_with_results(tmp_path):
     runner = CliRunner()
@@ -88,28 +90,8 @@ def test_search_command_with_results(tmp_path):
     assert "Test Paper Title" in result.output
 ```
 
-### API Mocking (requests-mock)
-```python
-def test_ingest_paper_success(tmp_path, requests_mock, monkeypatch):
-    mock_response = {"title": "Sample Research Paper", "type": "article"}
-    db_path = tmp_path / "test.db"
-    init_database(db_path)
-
-    requests_mock.get(
-        "https://api.openalex.org/works/doi:10.1234/sample",
-        json=mock_response,
-    )
-
-    monkeypatch.setenv("OPENALEX_API_KEY", "test-key")
-    monkeypatch.setenv("OPENALEX_API_URL", "https://api.openalex.org")
-
-    result = ingest_paper(db_path, "10.1234/sample")
-
-    assert result is not None
-    assert result["title"] == "Sample Research Paper"
-```
-
 ### Mocking Environment Variables
+
 ```python
 # Prefer monkeypatch over patch for env vars
 def test_config_loads_api_key(monkeypatch):
@@ -130,17 +112,6 @@ def test_config_loads_api_key(monkeypatch):
 | `raven.llm` | Cache, error handling |
 | `raven.embeddings` | Model loading, encoding |
 
-## Test Fixtures (conftest.py)
-
-```python
-@pytest.fixture
-def tmp_db(tmp_path):
-    """Create temporary database for tests."""
-    db_path = tmp_path / "test.db"
-    init_database(db_path)
-    return db_path
-```
-
 ## Anti-Patterns to Avoid
 
 1. **No assertions** - Every test must assert something
@@ -148,11 +119,7 @@ def tmp_db(tmp_path):
 3. **Skipping mocks** - Mock all external dependencies
 4. **Testing implementation** - Test behavior, not internals
 
-## 📂 Codebase References
-**Implementation**: `tests/` - All test files
-**Config**: `tests/conftest.py` - Fixtures and configuration
-**Module tests**: `tests/test_unit.py` - Comprehensive module tests
-
 ## Related Files
-- Module AGENTS.md files: `src/raven/*/AGENTS.md` (module-specific test rules)
+
+- Module AGENTS.md: `src/raven/*/AGENTS.md` (module-specific test rules)
 - documentation.md: Documentation standards

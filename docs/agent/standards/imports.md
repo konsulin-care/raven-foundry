@@ -1,9 +1,11 @@
-<!-- Context: core/standards/imports | Priority: high | Version: 1.0 | Updated: 2026-04-19 -->
-
-# Import Standards
-
-**Purpose**: Import ordering rules for Raven Foundry
-**Updated**: 2026-04-19
+---
+context: imports
+priority: high
+version: 1.0
+updated: 2026-04-19
+title: Import Standards
+purpose: Import ordering rules for Raven Foundry
+---
 
 ## Standard Ordering
 
@@ -25,5 +27,6 @@ from raven.storage import add_paper
 ```
 
 ## Related Files
+
 - `lazy-loading.md`: Lazy loading patterns
 - `code-patterns.md`: Code patterns

@@ -1,9 +1,11 @@
-<!-- Context: core/standards/complexity | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
-
-# Complexity Limits
-
-**Purpose**: File size and cognitive complexity limits
-**Updated**: 2026-04-19
+---
+context: complexity
+priority: critical
+version: 1.0
+updated: 2026-04-19
+title: Complexity Limits
+purpose: File size and cognitive complexity limits
+---
 
 ## File Size Limits
 
@@ -83,5 +85,6 @@ def process_order(order):
 ```
 
 ## Related Files
+
 - `code-style.md`: Code style standards
 - `anti-patterns.md`: Anti-patterns to avoid
