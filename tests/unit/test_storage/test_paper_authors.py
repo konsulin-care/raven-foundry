@@ -3,7 +3,7 @@
 Run with: pytest tests/unit/test_storage/test_paper_authors.py -v
 """
 
-from raven.storage.paper_authors import convert_authors_to_data
+from raven.storage.authors import convert_authors_to_data
 
 
 class TestConvertAuthorsToData:

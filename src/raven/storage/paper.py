@@ -11,9 +11,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from raven.storage.authors import convert_authors_to_data
 from raven.storage.paper_authors import (
     add_paper_authors,
-    convert_authors_to_data,
     delete_paper_authors,
 )
 from raven.storage.paper_queries import (

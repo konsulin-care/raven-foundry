@@ -5,8 +5,8 @@ Run with: pytest tests/unit/test_storage/test_paper_authors_db.py -v
 
 import sqlite3
 
+from raven.storage.authors import add_author
 from raven.storage.paper_authors import (
-    add_author,
     add_paper_authors,
     delete_paper_authors,
     get_paper_authors,

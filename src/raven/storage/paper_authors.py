@@ -6,33 +6,10 @@ Handles normalized author schema with authors + paper_authors tables.
 import contextlib
 import logging
 import sqlite3
-import uuid
 from pathlib import Path
 from typing import Any, cast
 
 logger = logging.getLogger(__name__)
-
-
-def add_author(
-    db_path: Path, author_id: str, name: str, orcid: str | None = None
-) -> None:
-    """Add or update an author in the authors table.
-
-    Args:
-        db_path: Path to the SQLite database file.
-        author_id: OpenAlex author ID.
-        name: Author's display name.
-        orcid: ORCID identifier (optional).
-    """
-    with contextlib.closing(sqlite3.connect(db_path)) as conn:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO authors (id, orcid, name)
-            VALUES (?, ?, ?)
-            """,
-            (author_id, orcid, name),
-        )
-        conn.commit()
 
 
 def add_paper_authors(
@@ -73,7 +50,6 @@ def add_paper_authors(
             author_name = author.get("name")
             author_orcid = author.get("orcid")
 
-            # Detect collisions: if author_id exists with different name, fail loudly
             existing = connection.execute(
                 "SELECT name, orcid FROM authors WHERE id = ?", (author_id,)
             ).fetchone()
@@ -90,7 +66,6 @@ def add_paper_authors(
                     f"but trying to insert '{author_name}'. Manual intervention required."
                 )
 
-            # Ensure author exists in authors table (use REPLACE to update orcid if changed)
             connection.execute(
                 """
                 INSERT OR REPLACE INTO authors (id, orcid, name)
@@ -99,7 +74,6 @@ def add_paper_authors(
                 (author_id, author_orcid, author_name),
             )
 
-            # Add junction entry
             connection.execute(
                 """
                 INSERT OR REPLACE INTO paper_authors
@@ -113,7 +87,6 @@ def add_paper_authors(
                     author.get("is_corresponding", 0),
                 ),
             )
-        # Commit only if we created the connection; caller controls commit when using external conn
         if own_connection:
             connection.commit()
     finally:
@@ -176,35 +149,3 @@ def delete_paper_authors(
     finally:
         if own_connection:
             connection.close()
-
-
-def convert_authors_to_data(
-    authors: str | None,
-) -> list[dict[str, Any]] | None:
-    """Convert comma-separated authors string to structured data.
-
-    Args:
-        authors: Comma-separated author names string.
-
-    Returns:
-        List of author dicts with id, name, orcid, is_corresponding, order.
-    """
-    if not authors:
-        return None
-
-    author_names = [n.strip() for n in authors.split(",") if n.strip()]
-    authors_data = []
-    for idx, name in enumerate(author_names):
-        # UUID5 provides 128-bit collision resistance vs truncated SHA256 (~40 bits)
-        normalized_name = name.lower().strip()
-        author_id = "A" + str(uuid.uuid5(uuid.NAMESPACE_DNS, normalized_name))
-        authors_data.append(
-            {
-                "id": author_id,
-                "name": name,
-                "orcid": None,
-                "is_corresponding": 0,
-                "order": idx,
-            }
-        )
-    return authors_data
