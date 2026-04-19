@@ -110,7 +110,7 @@ class TestCLICommands:
 
         # Mock OpenAlex API to return results with abstract
         # Note: Must patch the actual module where search_works is defined (lazy loading)
-        with patch("raven.ingestion.search.search_works") as mock_search:
+        with patch("raven.cli.search_orchestrator.search_works") as mock_search:
             mock_search.return_value = {
                 "results": [
                     {
