@@ -13,22 +13,6 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 
-def _get_author_id_from_orcid(orcid: str | None) -> str:
-    """Generate author ID from ORCID or create a new one.
-
-    Args:
-        orcid: ORCID identifier (with or without https://orcid.org/).
-
-    Returns:
-        OpenAlex author ID (e.g., "A5048491430").
-    """
-    if orcid:
-        # ORCID is already linked to an OpenAlex author ID
-        # We store the orcid and will resolve to author ID via lookup
-        return orcid.replace("https://orcid.org/", "").replace("0000-", "A0000-")
-    return "A" + str(uuid.uuid4())
-
-
 def add_author(
     db_path: Path, author_id: str, name: str, orcid: str | None = None
 ) -> None:

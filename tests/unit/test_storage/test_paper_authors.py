@@ -3,40 +3,7 @@
 Run with: pytest tests/unit/test_storage/test_paper_authors.py -v
 """
 
-from raven.storage.paper_authors import (
-    _get_author_id_from_orcid,
-    convert_authors_to_data,
-)
-
-
-class TestGetAuthorIdFromOrcid:
-    """Tests for _get_author_id_from_orcid function."""
-
-    def test_with_full_orcid_url(self):
-        """ORCID with URL prefix gets transformed correctly."""
-        result = _get_author_id_from_orcid("https://orcid.org/0000-0002-1825-0097")
-        assert result == "A0000-0002-1825-0097"
-
-    def test_with_orcid_only(self):
-        """ORCID without URL prefix gets transformed correctly."""
-        result = _get_author_id_from_orcid("0000-0002-1825-0097")
-        assert result == "A0000-0002-1825-0097"
-
-    def test_with_none_generates_uuid4_based_id(self):
-        """None input generates UUID4 based author ID."""
-        result = _get_author_id_from_orcid(None)
-        assert result.startswith("A")
-        assert len(result) == 37  # 'A' + 36 char UUID
-
-    def test_with_none_is_nondeterministic(self):
-        """None input generates a random UUID4 (different each call)."""
-        result1 = _get_author_id_from_orcid(None)
-        result2 = _get_author_id_from_orcid(None)
-        assert result1 != result2
-        assert result1.startswith("A")
-        assert len(result1) == 37
-        assert result2.startswith("A")
-        assert len(result2) == 37
+from raven.storage.paper_authors import convert_authors_to_data
 
 
 class TestConvertAuthorsToData:
