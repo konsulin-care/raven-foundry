@@ -116,7 +116,7 @@ def db_path_with_schema(tmp_path):
         conn.execute("""
             CREATE TABLE IF NOT EXISTS authors (
                 id TEXT PRIMARY KEY,
-                orcid TEXT,
+                orcid TEXT UNIQUE,
                 name TEXT NOT NULL
             )
         """)

@@ -5,6 +5,8 @@ Run with: pytest tests/unit/test_storage/test_paper_authors_db.py -v
 
 import sqlite3
 
+import pytest
+
 from raven.storage.authors import add_author
 from raven.storage.paper_authors import (
     add_paper_authors,
@@ -78,6 +80,71 @@ class TestDeletePaperAuthors:
         delete_paper_authors(db_path_with_schema, paper_id)
         authors = get_paper_authors(db_path_with_schema, paper_id)
         assert len(authors) == 0
+
+
+class TestAddPaperAuthorsCollision:
+    """Tests for orcid collision handling in add_paper_authors."""
+
+    def test_orcid_collision_raises_error(self, db_path_with_schema):
+        """Adding author with duplicate orcid but different id raises RuntimeError."""
+        paper_id = 1
+
+        authors_data_initial = [
+            {
+                "id": "A1",
+                "name": "Alice",
+                "orcid": "0000-0001-2345-6789",
+                "is_corresponding": 0,
+                "order": 0,
+            }
+        ]
+        add_paper_authors(db_path_with_schema, paper_id, authors_data_initial)
+
+        authors_data_conflict = [
+            {
+                "id": "B2",
+                "name": "Bob",
+                "orcid": "0000-0001-2345-6789",
+                "is_corresponding": 0,
+                "order": 0,
+            }
+        ]
+        with pytest.raises(RuntimeError, match="ORCID collision"):
+            add_paper_authors(db_path_with_schema, paper_id, authors_data_conflict)
+
+    def test_same_author_different_paper_succeeds(self, db_path_with_schema):
+        """Adding same author to different paper works correctly."""
+        add_paper_authors(
+            db_path_with_schema,
+            1,
+            [
+                {
+                    "id": "A1",
+                    "name": "Alice",
+                    "orcid": "0000-0001-2345-6789",
+                    "order": 0,
+                    "is_corresponding": 0,
+                }
+            ],
+        )
+        add_paper_authors(
+            db_path_with_schema,
+            2,
+            [
+                {
+                    "id": "A1",
+                    "name": "Alice",
+                    "orcid": "0000-0001-2345-6789",
+                    "order": 0,
+                    "is_corresponding": 0,
+                }
+            ],
+        )
+
+        authors_p1 = get_paper_authors(db_path_with_schema, 1)
+        authors_p2 = get_paper_authors(db_path_with_schema, 2)
+        assert len(authors_p1) == 1
+        assert len(authors_p2) == 1
 
 
 class TestAddAuthor:

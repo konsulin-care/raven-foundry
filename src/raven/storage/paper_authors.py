@@ -66,13 +66,34 @@ def add_paper_authors(
                     f"but trying to insert '{author_name}'. Manual intervention required."
                 )
 
-            connection.execute(
-                """
-                INSERT OR REPLACE INTO authors (id, orcid, name)
-                VALUES (?, ?, ?)
-                """,
-                (author_id, author_orcid, author_name),
-            )
+            author_exists = bool(existing)
+
+            if author_orcid and not author_exists:
+                orcid_existing = connection.execute(
+                    "SELECT id FROM authors WHERE orcid = ?", (author_orcid,)
+                ).fetchone()
+                if orcid_existing:
+                    logger.error(
+                        "ORCID collision: %s already maps to author '%s' but trying to add author '%s'. "
+                        "Manual intervention required to merge or reassign.",
+                        author_orcid,
+                        orcid_existing[0],
+                        author_id,
+                    )
+                    raise RuntimeError(
+                        f"ORCID collision: '{author_orcid}' already belongs to author "
+                        f"'{orcid_existing[0]}' but trying to insert '{author_id}'. "
+                        "Manual intervention required."
+                    )
+
+            if not author_exists:
+                connection.execute(
+                    """
+                    INSERT INTO authors (id, orcid, name)
+                    VALUES (?, ?, ?)
+                    """,
+                    (author_id, author_orcid, author_name),
+                )
 
             connection.execute(
                 """
