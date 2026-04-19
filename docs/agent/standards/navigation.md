@@ -20,23 +20,3 @@ purpose: Coding practice standards for Raven Foundry
 | complexity.md | File size (200 max), cognitive complexity (15 max) | critical |
 | coverage.md | Test coverage requirements | high |
 | documentation.md | Docstring standards | high |
-
-## Quick Reference
-
-| Task | Standard File |
-|------|--------------|
-| Type hints, naming | code-style.md |
-| SQLite, SQL, defaults | code-patterns.md |
-| Input validation | validation.md |
-| Import organization | imports.md |
-| Performance | lazy-loading.md |
-| What to avoid | anti-patterns.md |
-| Complexity limits | complexity.md |
-| Testing | coverage.md |
-| Docstrings | documentation.md |
-
-## Related Files
-
-- `@AGENTS.md` - Root entry point
-- `@docs/agent/navigation.md` - Agent context navigation
-- `@docs/agent/workflows/` - Agent workflows

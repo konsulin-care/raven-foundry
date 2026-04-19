@@ -83,7 +83,7 @@ def test_search_command_with_results(tmp_path):
     add_paper(db_path, "10.1234/test", "Test Paper Title", "article")
 
     result = runner.invoke(
-        raven.main.cli, ["search", "--db", str(db_path)], "--local", "test"
+        raven.main.cli, ["search", "--db", str(db_path), "--local", "test"]
     )
 
     assert result.exit_code == 0
