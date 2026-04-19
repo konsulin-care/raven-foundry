@@ -12,6 +12,106 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 
+def _tables_exist(connection: sqlite3.Connection) -> bool:
+    """Check if authors and paper_authors tables exist in the database."""
+    tables = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()
+    table_names = {t[0] for t in tables}
+    return "authors" in table_names and "paper_authors" in table_names
+
+
+def _ensure_no_id_or_orcid_collision(
+    connection: sqlite3.Connection,
+    author_id: str,
+    author_name: str,
+    author_orcid: str | None,
+) -> bool:
+    """Check for author ID and ORCID collisions.
+
+    Performs SELECT to check if author_id maps to different name (ID collision)
+    or if author_orcid is already used by different author (ORCID collision).
+    Logs errors and raises RuntimeError on collision.
+
+    Returns:
+        bool: True if author exists in database, False otherwise.
+    """
+    existing = connection.execute(
+        "SELECT name, orcid FROM authors WHERE id = ?", (author_id,)
+    ).fetchone()
+
+    if existing and existing[0] != author_name:
+        logger.error(
+            "Author ID collision: %s maps to '%s' but trying to insert '%s'. "
+            "Manual intervention required.",
+            author_id,
+            existing[0],
+            author_name,
+        )
+        raise RuntimeError(
+            f"Author ID collision: {author_id} maps to '{existing[0]}' "
+            f"but trying to insert '{author_name}'. Manual intervention required."
+        )
+
+    author_exists = bool(existing)
+
+    if author_orcid and not author_exists:
+        orcid_existing = connection.execute(
+            "SELECT id FROM authors WHERE orcid = ?", (author_orcid,)
+        ).fetchone()
+        if orcid_existing:
+            logger.error(
+                "ORCID collision: %s already maps to author '%s' but trying to add author '%s'. "
+                "Manual intervention required to merge or reassign.",
+                author_orcid,
+                orcid_existing[0],
+                author_id,
+            )
+            raise RuntimeError(
+                f"ORCID collision: '{author_orcid}' already belongs to author "
+                f"'{orcid_existing[0]}' but trying to insert '{author_id}'. "
+                "Manual intervention required."
+            )
+
+    return author_exists
+
+
+def _insert_author_if_missing(
+    connection: sqlite3.Connection,
+    author_id: str,
+    author_name: str,
+    author_orcid: str | None,
+    author_exists: bool,
+) -> None:
+    """Insert author record if not already in database."""
+    if not author_exists:
+        connection.execute(
+            """
+            INSERT INTO authors (id, orcid, name)
+            VALUES (?, ?, ?)
+            """,
+            (author_id, author_orcid, author_name),
+        )
+
+
+def _upsert_paper_author(
+    connection: sqlite3.Connection,
+    paper_id: int,
+    author_id: str,
+    order: int,
+    is_corresponding: int,
+) -> None:
+    """Insert or replace paper_author junction record."""
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO paper_authors
+            (paper_id, author_id, author_order, is_corresponding)
+        VALUES (?, ?, ?, ?)
+        """,
+        (paper_id, author_id, order, is_corresponding),
+    )
+
+
 def add_paper_authors(
     db_path: Path,
     paper_id: int,
@@ -37,77 +137,30 @@ def add_paper_authors(
     connection = cast(sqlite3.Connection, conn)
 
     try:
-        tables = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-        table_names = {t[0] for t in tables}
-
-        if "authors" not in table_names or "paper_authors" not in table_names:
-            return  # Skip if old database schema
+        if not _tables_exist(connection):
+            return
 
         for author in authors_data:
-            author_id = author.get("id")
-            author_name = author.get("name")
-            author_orcid = author.get("orcid")
+            author_id = cast(str, author.get("id"))
+            author_name = cast(str, author.get("name"))
+            author_orcid = cast(str | None, author.get("orcid"))
 
-            existing = connection.execute(
-                "SELECT name, orcid FROM authors WHERE id = ?", (author_id,)
-            ).fetchone()
-            if existing and existing[0] != author_name:
-                logger.error(
-                    "Author ID collision: %s maps to '%s' but trying to insert '%s'. "
-                    "Manual intervention required.",
-                    author_id,
-                    existing[0],
-                    author_name,
-                )
-                raise RuntimeError(
-                    f"Author ID collision: {author_id} maps to '{existing[0]}' "
-                    f"but trying to insert '{author_name}'. Manual intervention required."
-                )
-
-            author_exists = bool(existing)
-
-            if author_orcid and not author_exists:
-                orcid_existing = connection.execute(
-                    "SELECT id FROM authors WHERE orcid = ?", (author_orcid,)
-                ).fetchone()
-                if orcid_existing:
-                    logger.error(
-                        "ORCID collision: %s already maps to author '%s' but trying to add author '%s'. "
-                        "Manual intervention required to merge or reassign.",
-                        author_orcid,
-                        orcid_existing[0],
-                        author_id,
-                    )
-                    raise RuntimeError(
-                        f"ORCID collision: '{author_orcid}' already belongs to author "
-                        f"'{orcid_existing[0]}' but trying to insert '{author_id}'. "
-                        "Manual intervention required."
-                    )
-
-            if not author_exists:
-                connection.execute(
-                    """
-                    INSERT INTO authors (id, orcid, name)
-                    VALUES (?, ?, ?)
-                    """,
-                    (author_id, author_orcid, author_name),
-                )
-
-            connection.execute(
-                """
-                INSERT OR REPLACE INTO paper_authors
-                    (paper_id, author_id, author_order, is_corresponding)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    paper_id,
-                    author_id,
-                    author.get("order", 0),
-                    author.get("is_corresponding", 0),
-                ),
+            author_exists = _ensure_no_id_or_orcid_collision(
+                connection, author_id, author_name, author_orcid
             )
+
+            _insert_author_if_missing(
+                connection, author_id, author_name, author_orcid, author_exists
+            )
+
+            _upsert_paper_author(
+                connection,
+                paper_id,
+                author_id,
+                author.get("order", 0),
+                author.get("is_corresponding", 0),
+            )
+
         if own_connection:
             connection.commit()
     finally:
