@@ -63,9 +63,11 @@ Always pass relevant context to subagents:
 
 | Task Type | Context to Load |
 |-----------|-----------------|
-| Code tasks | `.opencode/context/core/standards/code-quality.md` |
+| Code tasks | `.opencode/context/core/standards/code-style.md`, `.opencode/context/core/standards/code-patterns.md` |
 | Test tasks | `.opencode/context/core/standards/coverage.md` |
 | Docs tasks | `.opencode/context/core/standards/documentation.md` |
+| Complexity issues | `.opencode/context/core/standards/complexity.md` |
+| Validation issues | `.opencode/context/core/standards/validation.md` |
 | Review tasks | `.opencode/context/core/workflows/code-review.md` |
 | Delegation | This file + relevant standards |
 

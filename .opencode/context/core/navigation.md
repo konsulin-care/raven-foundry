@@ -1,50 +1,26 @@
-<!-- Context: core/navigation | Priority: critical | Version: 1.0 | Updated: 2026-04-14 -->
+<!-- Context: core/navigation | Priority: critical | Version: 1.1 | Updated: 2026-04-19 -->
 
 # Context Navigation
 
-| File | Description | Priority |
-|------|-------------|----------|
-| standards/documentation.md | Docstring and documentation style | high |
-| standards/coverage.md | Test coverage requirements | high |
-| standards/code-quality.md | Code style and quality rules | critical |
-| workflows/code-review.md | Code review checklist | high |
-| workflows/task-delegation.md | How to delegate tasks | high |
-
-## Standards
-
-### Code Quality (critical)
-- Python 3.11+ type hints
-- SQLite context managers
-- Parameterized SQL queries
-- No mutable default args
-- Logging over print
-
-### Documentation (high)
-- Module docstrings with env variables
-- Function docstrings with Args/Returns
-- CLI command examples in docstrings
-
-### Test Coverage (high)
-- Tests for every function with return value
-- Mock external dependencies
-- pytest + requests-mock
-
-## Workflows
-
-### Code Review
-- Functionality check
-- Quality check (type hints, context managers)
-- Security check (no API keys, parameterized queries)
-- Testing check (coverage)
-
-### Task Delegation
-- Pass relevant context to subagents
-- Use TaskManager for 4+ files
-- Report-first on failures
+| File | Description |
+|------|-------------|
+| standards/code-style.md | Type hints, naming conventions |
+| standards/code-patterns.md | SQLite ctx mgr, parameterized queries, mutable defaults |
+| standards/validation.md | Input validation, assert rules, exception types |
+| standards/imports.md | Import ordering |
+| standards/lazy-loading.md | Two-level lazy loading |
+| standards/anti-patterns.md | Anti-patterns to avoid |
+| standards/complexity.md | File size (200 max), cognitive complexity (15 max) |
+| standards/coverage.md | Test coverage requirements |
+| standards/documentation.md | Docstring standards |
+| workflows/code-review.md | Code review checklist |
+| workflows/task-delegation.md | How to delegate tasks |
 
 ## Quick Routes
+
 - Project-specific: `project-intelligence/technical-domain.md`
 - Module rules: `src/raven/*/AGENTS.md`
 
 ## Related Files
+
 - Project Intelligence: `project-intelligence/`
