@@ -1,4 +1,4 @@
-<!-- Context: core/standards/anti-patterns | Priority: high | Version: 1.0 | Updated: 2026-04-19 -->
+<!-- Context: anti-patterns | Priority: high | Version: 1.0 | Updated: 2026-04-19 -->
 
 # Anti-Patterns to Avoid
 

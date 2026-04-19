@@ -33,4 +33,5 @@ Module-specific rules are defined in `src/raven/*/AGENTS.md` files:
 - @src/raven/embeddings/AGENTS.md: Handles semantic embedding generation
 - @src/raven/llm/AGENTS.md: Handles all LLM interactions via Groq
 - @src/raven/storage/AGENTS.md: Manages SQLite database and vector storage
+- @docs/agent/navigation.md: Agent context navigation (file-based memory)
 - @ANTIPATTERN.md: Describe anti-patterns to avoid, and the exception criteria

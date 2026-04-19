@@ -1,4 +1,4 @@
-<!-- Context: core/standards/imports | Priority: high | Version: 1.0 | Updated: 2026-04-19 -->
+<!-- Context: imports | Priority: high | Version: 1.0 | Updated: 2026-04-19 -->
 
 # Import Standards
 

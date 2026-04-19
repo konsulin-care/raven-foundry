@@ -1,4 +1,4 @@
-<!-- Context: core/standards/code-style | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
+<!-- Context: code-style | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
 
 # Code Style Standards
 
@@ -76,5 +76,5 @@ def get_items() -> list:  # Shadows list type!
 ```
 
 ## Related Files
-- `code-patterns.md`: Code patterns andanti-patterns
+- `code-patterns.md`: Code patterns and anti-patterns
 - `validation.md`: Input validation rules

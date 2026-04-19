@@ -1,13 +1,9 @@
-<!-- Context: core/workflows/code-review | Priority: high | Version: 1.0 | Updated: 2026-04-14 -->
+<!-- Context: code-review | Priority: high | Version: 1.0 | Updated: 2026-04-14 -->
 
 # Code Review Workflow
 
 **Purpose**: Code review process and checklist for Raven Foundry
 **Last Updated**: 2026-04-14
-
-## Quick Reference
-**Update Triggers**: Review process changes | New quality gates | Team feedback
-**Audience**: Developers, AI agents
 
 ## Review Checklist
 
@@ -48,24 +44,6 @@
 - [ ] Connection cleanup (context managers)
 - [ ] No unnecessary iterations
 
-## Review Process
-
-### For New Code
-1. Check against checklist above
-2. Verify tests exist for return values
-3. Check error handling
-4. Verify security requirements met
-
-### For Bug Fixes
-1. Identify root cause, not symptom
-2. Add test to prevent regression
-3. Verify fix doesn't break other tests
-
-### For Refactors
-1. Ensure behavior preserved
-2. Add tests for new patterns
-3. Remove dead code
-
 ## Common Issues to Flag
 
 ### Critical
@@ -81,7 +59,6 @@
 - Missing tests for new functions
 
 ### Minor
-- Missing docstrings
 - Magic numbers
 - Unused imports
 - Code duplication
@@ -93,16 +70,6 @@
 pytest tests/ -v
 ```
 
-**Check imports**:
-```bash
-python -m py_compile src/raven/*.py src/raven/*/*.py
-```
-
-## 📂 Codebase References
-**Implementation**: All code in `src/raven/` follows these patterns
-**Tests**: `tests/test_unit.py` - Comprehensive coverage
-
 ## Related Files
-- code-quality.md: Detailed quality rules
 - coverage.md: Test requirements
 - Module AGENTS.md: Module-specific standards

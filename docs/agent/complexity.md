@@ -1,4 +1,4 @@
-<!-- Context: core/standards/complexity | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
+<!-- Context: complexity | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
 
 # Complexity Limits
 

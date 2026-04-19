@@ -1,4 +1,4 @@
-<!-- Context: core/standards/lazy-loading | Priority: high | Version: 1.0 | Updated: 2026-04-19 -->
+<!-- Context: lazy-loading | Priority: high | Version: 1.0 | Updated: 2026-04-19 -->
 
 # Lazy Loading Standards
 

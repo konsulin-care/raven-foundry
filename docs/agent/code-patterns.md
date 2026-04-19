@@ -1,4 +1,4 @@
-<!-- Context: core/standards/code-patterns | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
+<!-- Context: code-patterns | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
 
 # Code Patterns
 

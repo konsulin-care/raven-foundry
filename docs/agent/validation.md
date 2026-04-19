@@ -1,4 +1,4 @@
-<!-- Context: core/standards/validation | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
+<!-- Context: validation | Priority: critical | Version: 1.0 | Updated: 2026-04-19 -->
 
 # Input Validation Standards
 
