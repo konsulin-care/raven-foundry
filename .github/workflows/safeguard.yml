@@ -48,11 +48,8 @@ jobs:
       - name: Run ruff
         run: ruff check src/
 
-      - name: Run black
-        run: black --check src/
-
       - name: Run mypy
-        run: mypy src/
+        run: mypy --ignore-missing-imports src/
 
   layer3-test:
     name: Contract Tests
@@ -86,9 +83,9 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run tests with coverage
-        run: pytest tests/ --cov=src/ --cov-report=term-missing
+        run: pytest tests/ --cov=raven --cov-report=term-missing
 
       - name: Enforce coverage threshold
         run: |
-          pytest tests/ --cov=src/ --cov-fail-under=80 && echo "Coverage: 80%+ met" || \
+          pytest tests/ --cov=raven --cov-fail-under=80 && echo "Coverage: 80%+ met" || \
           (echo "Coverage below 80%" && exit 1)

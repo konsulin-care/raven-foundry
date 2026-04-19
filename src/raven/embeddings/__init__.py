@@ -13,10 +13,11 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
+import click
 from sentence_transformers import SentenceTransformer
 
-# Import from raven.config
-from raven.config import _get_data_dir
+# Import from raven.paths
+from raven.paths import get_data_dir
 
 # Embedding model configuration
 EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
@@ -25,6 +26,28 @@ EMBEDDING_DIMENSIONS = 384
 # Module-level model cache (one-time load per AGENTS.md rules)
 _model: Optional[SentenceTransformer] = None
 
+# Track loaded state to avoid duplicate messages
+_model_loaded: bool = False
+
+
+def _lazy_get_model() -> SentenceTransformer:
+    """Load the sentence-transformers model with interactive progress messages.
+
+    Prints loading status messages that stay on screen until cleared by another message.
+    Uses interactive logging for better UX when loading heavy ML dependencies.
+
+    Returns:
+        Cached SentenceTransformer model instance.
+    """
+    global _model_loaded
+    if not _model_loaded:
+        click.echo("Loading sentence_transformers...")
+    model = _get_model()
+    if not _model_loaded:
+        click.echo("sentence_transformers loaded.")
+        _model_loaded = True
+    return model
+
 
 def _get_model_cache_dir() -> Path:
     """Get the model cache directory path.
@@ -32,7 +55,7 @@ def _get_model_cache_dir() -> Path:
     Returns:
         Path to the model cache directory (raven/data_dir/model_cache).
     """
-    return _get_data_dir() / "model_cache"
+    return get_data_dir() / "model_cache"
 
 
 def _get_model() -> SentenceTransformer:
@@ -86,11 +109,12 @@ def clean_model_cache() -> None:
     if cache_dir.exists():
         shutil.rmtree(cache_dir)
     # Reset in-memory model so next call re-downloads to cache
-    global _model
+    global _model, _model_loaded
     _model = None
+    _model_loaded = False
 
 
-def generate_embedding(text: str) -> list[float]:
+def generate_embedding(text: Optional[str]) -> list[float]:
     """Generate embedding for a single text using the configured model.
 
     Uses normalize_embeddings=True for cosine similarity compatibility.
@@ -107,7 +131,7 @@ def generate_embedding(text: str) -> list[float]:
     if not text or not text.strip():
         raise ValueError("Text cannot be empty or whitespace only")
 
-    model = _get_model()
+    model = _lazy_get_model()
     embedding = model.encode(text, normalize_embeddings=True)
 
     # Convert numpy array to list of floats
@@ -137,7 +161,7 @@ def generate_embeddings_batch(texts: list[str]) -> list[list[float]]:
     # Replace empty/whitespace-only with placeholder (model will handle gracefully)
     valid_texts = [t if t else " " for t in valid_texts]
 
-    model = _get_model()
+    model = _lazy_get_model()
     embeddings = model.encode(valid_texts, normalize_embeddings=True)
 
     # Convert numpy array to list of lists
